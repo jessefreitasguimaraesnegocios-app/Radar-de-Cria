@@ -1,0 +1,26 @@
+{
+  "entities": {
+    "PlaceCache": {
+      "title": "Place Cache",
+      "description": "Cache for Google Places API results",
+      "type": "object",
+      "properties": {
+        "results": {
+          "type": "array",
+          "description": "List of places returned by the API"
+        },
+        "timestamp": {
+          "type": "number",
+          "description": "Time when the cache was created"
+        }
+      },
+      "required": ["results", "timestamp"]
+    }
+  },
+  "firestore": {
+    "/places_cache/{cacheKey}": {
+      "schema": "PlaceCache",
+      "description": "Collection for caching API responses"
+    }
+  }
+}
