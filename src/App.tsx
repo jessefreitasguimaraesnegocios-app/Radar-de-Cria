@@ -139,17 +139,10 @@ const App: React.FC = () => {
             <div className="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-200">
               <NavigationIcon className="w-6 h-6 text-white" />
             </div>
-            <h1 className="text-2xl font-black tracking-tighter text-gray-900">LocalFinder</h1>
+            <h1 className="text-2xl font-black tracking-tighter text-gray-900">Radar de Cria</h1>
           </div>
           
           <div className="flex items-center gap-4">
-            {(!process.env.GOOGLE_PLACES_API_KEY || process.env.GOOGLE_PLACES_API_KEY === 'MY_GOOGLE_PLACES_KEY') && (
-              <div className="hidden lg:flex items-center gap-2 text-xs font-black text-amber-600 bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-100">
-                <AlertCircle className="w-4 h-4" />
-                <span>MODO DEMONSTRAÇÃO (Sem Chaves API)</span>
-              </div>
-            )}
-            
             {userLocation && (
               <button 
                 onClick={detectLocation}
@@ -236,9 +229,9 @@ const App: React.FC = () => {
         <div className="max-w-7xl mx-auto px-4 md:px-8 text-center">
           <div className="flex items-center justify-center gap-2 mb-4">
             <NavigationIcon className="w-5 h-5 text-blue-600" />
-            <span className="text-lg font-black tracking-tighter">LocalFinder</span>
+            <span className="text-lg font-black tracking-tighter">Radar de Cria</span>
           </div>
-          <p className="text-gray-400 text-sm font-medium">© 2026 LocalFinder. Todos os direitos reservados.</p>
+          <p className="text-gray-400 text-sm font-medium">© 2026 Radar de Cria. Todos os direitos reservados.</p>
         </div>
       </footer>
 

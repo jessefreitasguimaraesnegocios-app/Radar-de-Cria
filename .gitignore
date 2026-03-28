@@ -1,3 +1,6 @@
+# Supabase CLI (pode conter URLs/credenciais locais)
+supabase/.temp/
+
 node_modules/
 build/
 dist/
