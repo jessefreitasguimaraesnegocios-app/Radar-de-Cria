@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import debounce from 'lodash.debounce';
-import { MapPin, Navigation as NavigationIcon, Loader2, AlertCircle, Info } from 'lucide-react';
+import { MapPin, Navigation as NavigationIcon, Loader2, AlertCircle, Info, Target } from 'lucide-react';
 import Map from './components/Map';
 import PlaceCard from './components/PlaceCard';
 import Filters from './components/Filters';
 import PlaceDetails from './components/PlaceDetails';
+import PlacesResultsList from './components/PlacesResultsList';
 import { Place, UserLocation } from './types';
 import { distanceMeters } from './lib/geo';
 
@@ -193,7 +194,9 @@ const App: React.FC = () => {
   const filteredPlaces = withinRadius.filter((place) => {
     if (activeFilter === 'open') return place.opening_hours?.open_now;
     if (activeFilter === 'rating') return (place.rating || 0) >= 4.5;
-    if (activeFilter === 'app') return place.hasApp;
+    if (activeFilter === 'app') return place.hasApp === true;
+    if (activeFilter === 'no_app') return place.hasApp !== true;
+    if (activeFilter === 'no_site') return place.hasSite !== true;
     return true;
   });
 
@@ -206,7 +209,12 @@ const App: React.FC = () => {
             <div className="bg-blue-600 p-2 rounded-xl shadow-lg shadow-blue-200">
               <NavigationIcon className="w-6 h-6 text-white" />
             </div>
-            <h1 className="text-2xl font-black tracking-tighter text-gray-900">Radar de Cria</h1>
+            <div>
+              <h1 className="text-2xl font-black tracking-tighter text-gray-900 leading-tight">Radar de Cria</h1>
+              <p className="text-[11px] md:text-xs text-gray-500 font-medium max-w-md hidden sm:block">
+                Encontre negócios por segmento e região para oferecer seu app, cardápio digital ou outro serviço.
+              </p>
+            </div>
           </div>
           
           <div className="flex items-center gap-4">
@@ -224,6 +232,18 @@ const App: React.FC = () => {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 py-8 md:px-8">
+        <div className="mb-6 flex gap-3 rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-sm text-blue-950">
+          <Target className="w-5 h-5 shrink-0 text-blue-600 mt-0.5" />
+          <div>
+            <p className="font-black text-blue-900 text-xs uppercase tracking-wide mb-1">Prospecção</p>
+            <p className="text-blue-900/90 leading-relaxed">
+              Busque por tipo de negócio (ex.: <strong>barbearia</strong>, <strong>bar</strong>, <strong>restaurante</strong>).
+              Use <strong>Sem app próprio</strong> para quem pode receber seu app; <strong>Sem site</strong> para oferecer site ou
+              cardápio online. Marque na lista (verde / amarelo / vermelho) seu funil de contato.
+            </p>
+          </div>
+        </div>
+
         {/* Map Section */}
         <div className="mb-8">
           {userLocation ? (
@@ -268,15 +288,21 @@ const App: React.FC = () => {
           ) : (
             <>
               {filteredPlaces.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {filteredPlaces.map((place) => (
-                    <PlaceCard
-                      key={place.place_id}
-                      place={place}
-                      onClick={() => setSelectedPlaceId(place.place_id)}
-                    />
-                  ))}
-                </div>
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {filteredPlaces.map((place) => (
+                      <PlaceCard
+                        key={place.place_id}
+                        place={place}
+                        onClick={() => setSelectedPlaceId(place.place_id)}
+                      />
+                    ))}
+                  </div>
+                  <PlacesResultsList
+                    places={filteredPlaces}
+                    onOpenPlace={(id) => setSelectedPlaceId(id)}
+                  />
+                </>
               ) : (
                 <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
                   <div className="bg-gray-100 p-6 rounded-full">

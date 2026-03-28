@@ -173,6 +173,39 @@ async function fetchNearbySearchPaginated(
   return merged;
 }
 
+function buildWhatsAppUrl(phone?: string): string | undefined {
+  if (!phone) return undefined;
+  const d = phone.replace(/\D/g, '');
+  if (d.length < 10) return undefined;
+  if (d.startsWith('55') && d.length >= 12) return `https://wa.me/${d}`;
+  if (d.length >= 10 && d.length <= 11) return `https://wa.me/55${d}`;
+  return `https://wa.me/${d}`;
+}
+
+function extractSocialFromHtml(html: string, website: string): { instagram?: string; whatsapp?: string } {
+  const out: { instagram?: string; whatsapp?: string } = {};
+  const ig = html.match(/https?:\/\/(?:www\.)?instagram\.com\/([a-zA-Z0-9._]+)\/?/i);
+  if (ig) {
+    out.instagram = `https://instagram.com/${ig[1]}`;
+  }
+  const wa =
+    html.match(/https?:\/\/wa\.me\/[\d]+/i) ||
+    html.match(/https?:\/\/api\.whatsapp\.com\/send[^\s"'<>]*/i) ||
+    html.match(/https?:\/\/(?:www\.)?whatsapp\.com\/channel\/[^\s"'<>]+/i);
+  if (wa) {
+    out.whatsapp = wa[0].replace(/&amp;/g, '&').replace(/&quot;/g, '"');
+  }
+  try {
+    const u = new URL(website);
+    if (u.hostname.replace(/^www\./, '').includes('instagram.com')) {
+      out.instagram = `${u.origin}${u.pathname}`.replace(/\/$/, '') || website;
+    }
+  } catch {
+    /* ignore */
+  }
+  return out;
+}
+
 export async function handlePlaces(query: Query): Promise<{ status: number; json: unknown }> {
   const lat = first(query, 'lat');
   const lng = first(query, 'lng');
@@ -285,12 +318,14 @@ export async function handlePlaceDetails(query: Query): Promise<{ status: number
 
   try {
     const response = await axios.get(
-      `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,formatted_address,rating,website,formatted_phone_number,opening_hours,photos,geometry&key=${apiKey}`
+      `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=name,formatted_address,vicinity,rating,website,formatted_phone_number,international_phone_number,opening_hours,photos,geometry&key=${apiKey}`
     );
 
     const details = response.data.result;
 
     let hasApp = false;
+    let instagramUrl: string | undefined;
+    let whatsappFromHtml: string | undefined;
     if (details.website) {
       try {
         const siteResponse = await axios.get(details.website, {
@@ -300,8 +335,12 @@ export async function handlePlaceDetails(query: Query): Promise<{ status: number
               'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
           },
         });
-        const siteContent = siteResponse.data;
+        const siteContent =
+          typeof siteResponse.data === 'string' ? siteResponse.data : String(siteResponse.data);
         hasApp = /play\.google\.com\/store\/apps\/details|apps\.apple\.com\/.*\/app\//i.test(siteContent);
+        const social = extractSocialFromHtml(siteContent, details.website);
+        instagramUrl = social.instagram;
+        whatsappFromHtml = social.whatsapp;
       } catch (e) {
         console.warn(
           `Could not fetch website for ${details.name}:`,
@@ -310,8 +349,14 @@ export async function handlePlaceDetails(query: Query): Promise<{ status: number
       }
     }
 
+    const phoneForWa =
+      details.international_phone_number || details.formatted_phone_number;
+    const whatsappFromPhone = buildWhatsAppUrl(phoneForWa);
+
     details.hasApp = hasApp;
     details.hasSite = !!details.website;
+    details.instagram_url = instagramUrl;
+    details.whatsapp_url = whatsappFromHtml || whatsappFromPhone;
 
     return { status: 200, json: details };
   } catch (error) {

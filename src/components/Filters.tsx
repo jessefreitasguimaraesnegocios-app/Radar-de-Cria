@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, MapPin, Filter, SlidersHorizontal, Navigation as NavigationIcon } from 'lucide-react';
+import { Search, MapPin, Navigation as NavigationIcon } from 'lucide-react';
 
 interface FiltersProps {
   radius: number;
@@ -44,7 +44,7 @@ const Filters: React.FC<FiltersProps> = ({
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
             <input
               type="text"
-              placeholder="O que você procura? (ex: barbearia)"
+              placeholder="Segmento: barbearia, bar, restaurante, padaria…"
               className="w-full pl-10 pr-4 py-3 bg-gray-50 rounded-xl border-none focus:ring-2 focus:ring-blue-500 transition-all outline-none text-gray-700"
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
@@ -97,7 +97,7 @@ const Filters: React.FC<FiltersProps> = ({
       </div>
 
       <div className="flex gap-2 overflow-x-auto pb-2 scrollbar-hide">
-        {['all', 'open', 'rating', 'app'].map((filter) => (
+        {['all', 'no_app', 'no_site', 'open', 'rating', 'app'].map((filter) => (
           <button
             key={filter}
             onClick={() => onFilterChange(filter)}
@@ -108,9 +108,11 @@ const Filters: React.FC<FiltersProps> = ({
             }`}
           >
             {filter === 'all' && 'Todos'}
+            {filter === 'no_app' && 'Sem app (prospecção)'}
+            {filter === 'no_site' && 'Sem site'}
             {filter === 'open' && 'Aberto agora'}
             {filter === 'rating' && 'Melhor avaliação'}
-            {filter === 'app' && 'Tem App'}
+            {filter === 'app' && 'Já tem app'}
           </button>
         ))}
       </div>

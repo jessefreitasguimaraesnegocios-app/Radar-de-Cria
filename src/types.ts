@@ -18,6 +18,12 @@ export interface Place {
   hasSite?: boolean;
   website?: string;
   formatted_phone_number?: string;
+  international_phone_number?: string;
+  formatted_address?: string;
+  /** Link wa.me ou do site */
+  whatsapp_url?: string;
+  /** Perfil Instagram detectado no site */
+  instagram_url?: string;
 }
 
 export interface UserLocation {
