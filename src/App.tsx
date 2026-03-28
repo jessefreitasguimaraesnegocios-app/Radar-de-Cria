@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import debounce from 'lodash.debounce';
 import { MapPin, Navigation as NavigationIcon, Loader2, AlertCircle, Info } from 'lucide-react';
@@ -7,10 +7,29 @@ import PlaceCard from './components/PlaceCard';
 import Filters from './components/Filters';
 import PlaceDetails from './components/PlaceDetails';
 import { Place, UserLocation } from './types';
+import { distanceMeters } from './lib/geo';
+
+async function enrichWithDetails(placesIn: Place[], limit = 15): Promise<Place[]> {
+  const head = placesIn.slice(0, limit);
+  const detailedHead = await Promise.all(
+    head.map(async (place) => {
+      try {
+        const detailsResponse = await fetch(`/api/place-details?placeId=${place.place_id}`);
+        return await detailsResponse.json();
+      } catch {
+        return place;
+      }
+    })
+  );
+  return [...detailedHead, ...placesIn.slice(limit)];
+}
 
 const App: React.FC = () => {
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [places, setPlaces] = useState<Place[]>([]);
+  const placesRef = useRef<Place[]>([]);
+  const latestFetchId = useRef(0);
+  const [maxFetchedRadius, setMaxFetchedRadius] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [radius, setRadius] = useState(5000);
@@ -19,40 +38,78 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [keyword, setKeyword] = useState('');
 
-  const fetchPlaces = async (lat: number, lng: number, rad: number, searchKeyword?: string) => {
+  useEffect(() => {
+    placesRef.current = places;
+  }, [places]);
+
+  const loadPlacesFresh = async (lat: number, lng: number, rad: number, searchKeyword?: string) => {
+    const fetchId = ++latestFetchId.current;
+    setLoading(true);
+    setMaxFetchedRadius(0);
+    try {
+      const kw = searchKeyword !== undefined ? searchKeyword : keyword;
+      const response = await fetch(`/api/places?lat=${lat}&lng=${lng}&radius=${rad}&type=establishment${kw ? `&keyword=${encodeURIComponent(kw)}` : ''}`);
+      const data = await response.json();
+
+      if (fetchId !== latestFetchId.current) return;
+
+      if (!Array.isArray(data)) {
+        console.error('API returned non-array data:', data);
+        setPlaces([]);
+        if (data.error) setError(data.error);
+        return;
+      }
+
+      const detailedPlaces = await enrichWithDetails(data, 15);
+      if (fetchId !== latestFetchId.current) return;
+      setPlaces(detailedPlaces);
+      setMaxFetchedRadius(rad);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching places:', err);
+      if (fetchId === latestFetchId.current) {
+        setError('Não foi possível carregar os estabelecimentos próximos.');
+      }
+    } finally {
+      if (fetchId === latestFetchId.current) {
+        setLoading(false);
+      }
+    }
+  };
+
+  const expandPlacesRadius = async (lat: number, lng: number, rad: number, searchKeyword?: string) => {
+    const fetchId = ++latestFetchId.current;
     setLoading(true);
     try {
       const kw = searchKeyword !== undefined ? searchKeyword : keyword;
       const response = await fetch(`/api/places?lat=${lat}&lng=${lng}&radius=${rad}&type=establishment${kw ? `&keyword=${encodeURIComponent(kw)}` : ''}`);
       const data = await response.json();
-      
+
+      if (fetchId !== latestFetchId.current) return;
+
       if (!Array.isArray(data)) {
         console.error('API returned non-array data:', data);
-        setPlaces([]);
         if (data.error) setError(data.error);
-        setLoading(false);
         return;
       }
 
-      // Fetch details for each place to get website/app info (this could be optimized)
-      const detailedPlaces = await Promise.all(
-        data.slice(0, 10).map(async (place: Place) => {
-          try {
-            const detailsResponse = await fetch(`/api/place-details?placeId=${place.place_id}`);
-            return await detailsResponse.json();
-          } catch (e) {
-            return place;
-          }
-        })
-      );
-
-      setPlaces(detailedPlaces);
+      const prev = placesRef.current;
+      const prevIds = new Set(prev.map((p) => p.place_id));
+      const newRaw = data.filter((p: Place) => !prevIds.has(p.place_id)) as Place[];
+      const enrichedNew = newRaw.length > 0 ? await enrichWithDetails(newRaw, 15) : [];
+      if (fetchId !== latestFetchId.current) return;
+      setPlaces([...prev, ...enrichedNew]);
+      setMaxFetchedRadius(rad);
       setError(null);
     } catch (err) {
       console.error('Error fetching places:', err);
-      setError('Não foi possível carregar os estabelecimentos próximos.');
+      if (fetchId === latestFetchId.current) {
+        setError('Não foi possível carregar os estabelecimentos próximos.');
+      }
     } finally {
-      setLoading(false);
+      if (fetchId === latestFetchId.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -66,13 +123,13 @@ const App: React.FC = () => {
         (position) => {
           const { latitude, longitude } = position.coords;
           setUserLocation({ lat: latitude, lng: longitude });
-          fetchPlaces(latitude, longitude, radius);
+          loadPlacesFresh(latitude, longitude, radius);
         },
         (err) => {
           console.error('Geolocation error:', err);
           setError('Não conseguimos detectar sua localização automaticamente. Usando Belo Horizonte como padrão, mas você pode buscar sua cidade no campo abaixo.');
           setUserLocation(defaultLocation);
-          fetchPlaces(defaultLocation.lat, defaultLocation.lng, radius);
+          loadPlacesFresh(defaultLocation.lat, defaultLocation.lng, radius);
           setLoading(false);
         },
         { timeout: 10000, enableHighAccuracy: true }
@@ -80,7 +137,7 @@ const App: React.FC = () => {
     } else {
       setError('Geolocalização não suportada. Busque sua cidade manualmente.');
       setUserLocation(defaultLocation);
-      fetchPlaces(defaultLocation.lat, defaultLocation.lng, radius);
+      loadPlacesFresh(defaultLocation.lat, defaultLocation.lng, radius);
       setLoading(false);
     }
   }, [radius, keyword]);
@@ -91,15 +148,16 @@ const App: React.FC = () => {
 
   const handleRadiusChange = (newRadius: number) => {
     setRadius(newRadius);
-    if (userLocation) {
-      fetchPlaces(userLocation.lat, userLocation.lng, newRadius, keyword);
+    if (!userLocation) return;
+    if (newRadius > maxFetchedRadius) {
+      void expandPlacesRadius(userLocation.lat, userLocation.lng, newRadius);
     }
   };
 
   const handleKeywordSearch = (newKeyword: string) => {
     setKeyword(newKeyword);
     if (userLocation) {
-      fetchPlaces(userLocation.lat, userLocation.lng, radius, newKeyword);
+      loadPlacesFresh(userLocation.lat, userLocation.lng, radius, newKeyword);
     }
   };
 
@@ -112,7 +170,7 @@ const App: React.FC = () => {
         const data = await response.json();
         if (data.lat && data.lng) {
           setUserLocation({ lat: data.lat, lng: data.lng });
-          fetchPlaces(data.lat, data.lng, radius);
+          loadPlacesFresh(data.lat, data.lng, radius);
         }
       } catch (err) {
         console.error('Search error:', err);
@@ -123,7 +181,16 @@ const App: React.FC = () => {
     [radius]
   );
 
-  const filteredPlaces = places.filter((place) => {
+  const withinRadius =
+    userLocation == null
+      ? places
+      : places.filter((place) => {
+          const loc = place.geometry?.location;
+          if (loc == null) return false;
+          return distanceMeters(userLocation, loc) <= radius;
+        });
+
+  const filteredPlaces = withinRadius.filter((place) => {
     if (activeFilter === 'open') return place.opening_hours?.open_now;
     if (activeFilter === 'rating') return (place.rating || 0) >= 4.5;
     if (activeFilter === 'app') return place.hasApp;
@@ -202,9 +269,9 @@ const App: React.FC = () => {
             <>
               {filteredPlaces.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {filteredPlaces.map((place, index) => (
+                  {filteredPlaces.map((place) => (
                     <PlaceCard
-                      key={`${place.place_id}-${index}`}
+                      key={place.place_id}
                       place={place}
                       onClick={() => setSelectedPlaceId(place.place_id)}
                     />

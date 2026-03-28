@@ -89,6 +89,90 @@ const mockPlaces = (lat: string, lng: string, keyword?: string) => {
   ];
 };
 
+/** Google Nearby Search: até ~20 por página; no máximo ~60 resultados com paginação. */
+const NEARBY_MAX_PAGES = 3;
+const PAGE_TOKEN_DELAY_MS = 2200;
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+type NearbyPlace = { place_id?: string };
+
+async function fetchNearbySearchPaginated(
+  lat: string,
+  lng: string,
+  radius: string,
+  type: string,
+  keyword: string | undefined,
+  apiKey: string
+): Promise<NearbyPlace[]> {
+  const base = new URLSearchParams({
+    location: `${lat},${lng}`,
+    radius,
+    type,
+    key: apiKey,
+  });
+  if (keyword) {
+    base.set('keyword', keyword);
+  }
+
+  const merged: NearbyPlace[] = [];
+  const seen = new Set<string>();
+  let nextPageToken: string | undefined;
+
+  for (let page = 0; page < NEARBY_MAX_PAGES; page++) {
+    if (page > 0) {
+      await sleep(PAGE_TOKEN_DELAY_MS);
+    }
+
+    const url =
+      page === 0
+        ? `https://maps.googleapis.com/maps/api/place/nearbysearch/json?${base.toString()}`
+        : `https://maps.googleapis.com/maps/api/place/nearbysearch/json?pagetoken=${encodeURIComponent(nextPageToken!)}&key=${encodeURIComponent(apiKey)}`;
+
+    let data: {
+      status: string;
+      results?: NearbyPlace[];
+      next_page_token?: string;
+      error_message?: string;
+    };
+
+    const { data: first } = await axios.get(url);
+    data = first;
+
+    if (data.status === 'INVALID_REQUEST' && page > 0) {
+      await sleep(2500);
+      const { data: retry } = await axios.get(url);
+      data = retry;
+    }
+
+    if (page === 0 && data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+      throw new Error(data.error_message || `Places status: ${data.status}`);
+    }
+
+    if (page > 0 && data.status !== 'OK' && data.status !== 'ZERO_RESULTS') {
+      break;
+    }
+
+    const batch = data.results ?? [];
+    for (const row of batch) {
+      const id = row.place_id;
+      if (id && !seen.has(id)) {
+        seen.add(id);
+        merged.push(row);
+      }
+    }
+
+    nextPageToken = data.next_page_token;
+    if (!nextPageToken) {
+      break;
+    }
+  }
+
+  return merged;
+}
+
 export async function handlePlaces(query: Query): Promise<{ status: number; json: unknown }> {
   const lat = first(query, 'lat');
   const lng = first(query, 'lng');
@@ -136,11 +220,14 @@ export async function handlePlaces(query: Query): Promise<{ status: number; json
       return { status: 200, json: cachedResults };
     }
 
-    const response = await axios.get(
-      `https://maps.googleapis.com/maps/api/place/nearbysearch/json?location=${lat},${lng}&radius=${radius}&type=${type}${keyword ? `&keyword=${encodeURIComponent(keyword)}` : ''}&key=${apiKey}`
+    let results: NearbyPlace[] = await fetchNearbySearchPaginated(
+      lat,
+      lng,
+      radius,
+      type,
+      keyword,
+      apiKey
     );
-
-    let results = response.data.results;
 
     if (results.length === 0 && process.env.GEOAPIFY_API_KEY) {
       try {
