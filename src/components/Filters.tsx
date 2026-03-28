@@ -1,5 +1,5 @@
 import React from 'react';
-import { Search, MapPin, Navigation as NavigationIcon } from 'lucide-react';
+import { Search, MapPin, Navigation as NavigationIcon, List } from 'lucide-react';
 
 interface FiltersProps {
   radius: number;
@@ -9,6 +9,10 @@ interface FiltersProps {
   onKeywordSearch: (keyword: string) => void;
   onFilterChange: (filter: string) => void;
   activeFilter: string;
+  /** Total após filtros (mapa + lista). */
+  resultCount: number;
+  loading: boolean;
+  onScrollToList: () => void;
 }
 
 const Filters: React.FC<FiltersProps> = ({
@@ -18,6 +22,9 @@ const Filters: React.FC<FiltersProps> = ({
   onFilterChange,
   activeFilter,
   onKeywordSearch,
+  resultCount,
+  loading,
+  onScrollToList,
 }) => {
   const [query, setQuery] = React.useState('');
   const [keyword, setKeyword] = React.useState('');
@@ -115,6 +122,34 @@ const Filters: React.FC<FiltersProps> = ({
             {filter === 'app' && 'Já tem app'}
           </button>
         ))}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-gray-100">
+        <div className="text-sm">
+          {loading ? (
+            <span className="font-bold text-gray-500">Buscando resultados…</span>
+          ) : (
+            <p className="text-gray-900">
+              <span className="text-2xl font-black tabular-nums">{resultCount}</span>
+              <span className="ml-2 font-bold text-gray-600">
+                {resultCount === 1 ? 'resultado' : 'resultados'}
+              </span>
+              <span className="block text-xs font-medium text-gray-400 mt-0.5">
+                Total com os filtros atuais (mapa e tabela abaixo)
+              </span>
+            </p>
+          )}
+        </div>
+        {!loading && resultCount > 0 && (
+          <button
+            type="button"
+            onClick={onScrollToList}
+            className="inline-flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-black text-sm hover:bg-emerald-700 transition-all active:scale-95 shadow-md shadow-emerald-200 shrink-0"
+          >
+            <List className="w-4 h-4" />
+            Ir para a lista
+          </button>
+        )}
       </div>
     </div>
   );

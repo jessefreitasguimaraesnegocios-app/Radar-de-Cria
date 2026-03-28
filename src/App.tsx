@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { MapPin, Navigation as NavigationIcon, Loader2, AlertCircle, Info, Target } from 'lucide-react';
 import Map from './components/Map';
@@ -8,6 +8,8 @@ import PlaceDetails from './components/PlaceDetails';
 import PlacesResultsList from './components/PlacesResultsList';
 import { Place, UserLocation } from './types';
 import { distanceMeters } from './lib/geo';
+import { computeRowMarkKeys } from './lib/placeMarks';
+import { usePlaceMarks } from './hooks/usePlaceMarks';
 
 async function enrichWithDetails(placesIn: Place[], limit = 15): Promise<Place[]> {
   const head = placesIn.slice(0, limit);
@@ -36,6 +38,7 @@ const App: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [keyword, setKeyword] = useState('');
+  const { marks, setMark } = usePlaceMarks();
 
   useEffect(() => {
     placesRef.current = places;
@@ -160,6 +163,13 @@ const App: React.FC = () => {
     }
   };
 
+  const scrollToResultsList = useCallback(() => {
+    document.getElementById('places-results-list')?.scrollIntoView({
+      behavior: 'smooth',
+      block: 'start',
+    });
+  }, []);
+
   const handleCitySearch = async (raw: string) => {
     const q = raw.trim();
     if (!q) {
@@ -203,6 +213,8 @@ const App: React.FC = () => {
     return true;
   });
 
+  const rowMarkKeys = useMemo(() => computeRowMarkKeys(filteredPlaces), [filteredPlaces]);
+
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 font-sans selection:bg-blue-100 selection:text-blue-900">
       {/* Header */}
@@ -242,7 +254,7 @@ const App: React.FC = () => {
             <p className="text-blue-900/90 leading-relaxed">
               Busque por tipo de negócio (ex.: <strong>barbearia</strong>, <strong>bar</strong>, <strong>restaurante</strong>).
               Use <strong>Sem app próprio</strong> para quem pode receber seu app; <strong>Sem site</strong> para oferecer site ou
-              cardápio online. Marque na lista (verde / amarelo / vermelho) seu funil de contato.
+              cardápio online. Marque na lista (verde / amarelo / vermelho): o pino no mapa acompanha a cor; sua posição fica em amarelo.
             </p>
           </div>
         </div>
@@ -253,6 +265,8 @@ const App: React.FC = () => {
             <Map
               userLocation={userLocation}
               places={filteredPlaces}
+              rowMarkKeys={rowMarkKeys}
+              marks={marks}
               onPlaceSelect={(place) => setSelectedPlaceId(place.place_id)}
             />
           ) : (
@@ -270,6 +284,9 @@ const App: React.FC = () => {
           onKeywordSearch={handleKeywordSearch}
           onFilterChange={setActiveFilter}
           activeFilter={activeFilter}
+          resultCount={filteredPlaces.length}
+          loading={loading}
+          onScrollToList={scrollToResultsList}
         />
 
         {/* Error State */}
@@ -302,6 +319,8 @@ const App: React.FC = () => {
                   </div>
                   <PlacesResultsList
                     places={filteredPlaces}
+                    marks={marks}
+                    setMark={setMark}
                     onOpenPlace={(id) => setSelectedPlaceId(id)}
                   />
                 </>

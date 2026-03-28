@@ -2,17 +2,33 @@ import React, { useEffect, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { Place, UserLocation } from '../types';
+import {
+  mapMarkerHex,
+  USER_LOCATION_MARKER_HEX,
+  type PlaceMarkColor,
+} from '../lib/placeMarks';
 
 interface MapProps {
   userLocation: UserLocation;
   places: Place[];
+  /** Mesmas chaves que a tabela (computeRowMarkKeys). */
+  rowMarkKeys: string[];
+  marks: Record<string, PlaceMarkColor>;
   onPlaceSelect: (place: Place) => void;
 }
 
-const Map: React.FC<MapProps> = ({ userLocation, places, onPlaceSelect }) => {
+const Map: React.FC<MapProps> = ({
+  userLocation,
+  places,
+  rowMarkKeys,
+  marks,
+  onPlaceSelect,
+}) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markers = useRef<mapboxgl.Marker[]>([]);
+  const onPlaceSelectRef = useRef(onPlaceSelect);
+  onPlaceSelectRef.current = onPlaceSelect;
 
   useEffect(() => {
     const fetchToken = async () => {
@@ -43,29 +59,40 @@ const Map: React.FC<MapProps> = ({ userLocation, places, onPlaceSelect }) => {
 
   useEffect(() => {
     if (map.current) {
-      // Clear existing markers
       markers.current.forEach((marker) => marker.remove());
       markers.current = [];
 
-      // Add user marker
-      const userMarker = new mapboxgl.Marker({ color: '#3B82F6' })
+      const userMarker = new mapboxgl.Marker({ color: USER_LOCATION_MARKER_HEX })
         .setLngLat([userLocation.lng, userLocation.lat])
-        .setPopup(new mapboxgl.Popup().setHTML('<h3>Você está aqui</h3>'))
+        .setPopup(new mapboxgl.Popup().setHTML('<h3>Sua localização</h3>'))
         .addTo(map.current);
       markers.current.push(userMarker);
 
-      // Add place markers
-      places.forEach((place) => {
-        const marker = new mapboxgl.Marker({ color: '#EF4444' })
+      places.forEach((place, index) => {
+        const markKey = rowMarkKeys[index] ?? `row:${index}`;
+        const mark = marks[markKey];
+        const color = mapMarkerHex(mark);
+
+        const marker = new mapboxgl.Marker({ color })
           .setLngLat([place.geometry.location.lng, place.geometry.location.lat])
-          .setPopup(new mapboxgl.Popup().setHTML(`<h3>${place.name}</h3>`))
+          .setPopup(
+            new mapboxgl.Popup().setHTML(
+              `<h3 style="margin:0 0 4px">${place.name}</h3>${
+                mark
+                  ? `<p style="margin:0;font-size:12px;color:#666">Marcado: ${
+                      mark === 'red' ? 'vermelho' : mark === 'yellow' ? 'amarelo' : 'verde'
+                    }</p>`
+                  : ''
+              }`
+            )
+          )
           .addTo(map.current!);
-        
-        marker.getElement().addEventListener('click', () => onPlaceSelect(place));
+
+        marker.getElement().addEventListener('click', () => onPlaceSelectRef.current(place));
         markers.current.push(marker);
       });
     }
-  }, [places, userLocation]);
+  }, [places, userLocation, marks, rowMarkKeys]);
 
   return <div ref={mapContainer} className="w-full h-64 md:h-96 rounded-xl overflow-hidden shadow-lg" />;
 };

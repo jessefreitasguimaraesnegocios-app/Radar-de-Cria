@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React from 'react';
 import {
   ExternalLink,
   Smartphone,
@@ -10,90 +10,35 @@ import {
   Phone,
 } from 'lucide-react';
 import { Place } from '../types';
+import {
+  computeRowMarkKeys,
+  type PlaceMarkColor,
+} from '../lib/placeMarks';
 
-const MARKS_STORAGE_KEY = 'radar-de-cria-place-marks';
-
-export type PlaceMarkColor = 'red' | 'yellow' | 'green';
-
-function loadMarksFromStorage(): Record<string, PlaceMarkColor> {
-  try {
-    const raw = localStorage.getItem(MARKS_STORAGE_KEY);
-    if (!raw) return {};
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
-    const out: Record<string, PlaceMarkColor> = {};
-    for (const [id, v] of Object.entries(parsed)) {
-      if (v === 'red' || v === 'yellow' || v === 'green') {
-        out[id] = v;
-      }
-    }
-    return out;
-  } catch {
-    return {};
-  }
-}
+export type { PlaceMarkColor };
 
 interface PlacesResultsListProps {
   places: Place[];
   onOpenPlace: (placeId: string) => void;
+  marks: Record<string, PlaceMarkColor>;
+  setMark: (markKey: string, color: PlaceMarkColor | null) => void;
 }
 
-/** Chave única por linha da tabela (evita marcar várias linhas quando place_id repete ou falta). */
-function computeRowMarkKeys(placesIn: Place[]): string[] {
-  const counts = new Map<string, number>();
-  for (const p of placesIn) {
-    const id = (p.place_id && String(p.place_id).trim()) || '';
-    counts.set(id, (counts.get(id) ?? 0) + 1);
-  }
-
-  return placesIn.map((p, index) => {
-    const id = (p.place_id && String(p.place_id).trim()) || '';
-    if (id && (counts.get(id) ?? 0) === 1) {
-      return id;
-    }
-    if (id) {
-      return `${id}::__row${index}`;
-    }
-    const loc = p.geometry?.location;
-    if (loc != null && typeof loc.lat === 'number' && typeof loc.lng === 'number') {
-      return `geo:${index}:${loc.lat.toFixed(6)},${loc.lng.toFixed(6)}`;
-    }
-    return `row:${index}:${(p.name || 'place').slice(0, 40)}`;
-  });
-}
-
-const PlacesResultsList: React.FC<PlacesResultsListProps> = ({ places, onOpenPlace }) => {
-  const [marks, setMarks] = useState<Record<string, PlaceMarkColor>>({});
-
-  const rowMarkKeys = useMemo(() => computeRowMarkKeys(places), [places]);
-
-  useEffect(() => {
-    setMarks(loadMarksFromStorage());
-  }, []);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(MARKS_STORAGE_KEY, JSON.stringify(marks));
-    } catch {
-      /* ignore */
-    }
-  }, [marks]);
-
-  const setMark = useCallback((placeId: string, color: PlaceMarkColor | null) => {
-    setMarks((prev) => {
-      const next = { ...prev };
-      if (color == null) {
-        delete next[placeId];
-      } else {
-        next[placeId] = color;
-      }
-      return next;
-    });
-  }, []);
+const PlacesResultsList: React.FC<PlacesResultsListProps> = ({
+  places,
+  onOpenPlace,
+  marks,
+  setMark,
+}) => {
+  const rowMarkKeys = React.useMemo(() => computeRowMarkKeys(places), [places]);
 
   if (places.length === 0) return null;
 
   return (
-    <section className="mt-14 mb-8">
+    <section
+      id="places-results-list"
+      className="mt-14 mb-8 scroll-mt-28"
+    >
       <div className="flex items-center gap-2 mb-4">
         <div className="bg-emerald-600 p-2 rounded-xl text-white">
           <ListChecks className="w-5 h-5" />
@@ -102,8 +47,8 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({ places, onOpenPla
           <h2 className="text-xl font-black text-gray-900 tracking-tight">Lista de resultados</h2>
           <p className="text-xs text-gray-500 font-medium max-w-3xl">
             Contatos para abordagem: WhatsApp, Instagram, site, app, endereço e telefone. Use as cores como
-            funil: vermelho (descartado), amarelo (follow-up), verde (combinado / quente). Salvo neste
-            navegador.
+            funil: vermelho (descartado), amarelo (follow-up), verde (combinado / quente). As mesmas cores
+            aparecem no mapa. Salvo neste navegador.
           </p>
         </div>
       </div>
