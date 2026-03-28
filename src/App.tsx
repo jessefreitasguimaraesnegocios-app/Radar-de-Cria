@@ -9,6 +9,15 @@ import PlacesResultsList from './components/PlacesResultsList';
 import { Place, UserLocation } from './types';
 import { distanceMeters } from './lib/geo';
 import { computeRowMarkKeys } from './lib/placeMarks';
+import {
+  buildSearchKey,
+  FRESH_MS,
+  MAX_RETENTION_MS,
+  mergePlacesById,
+  readEntry,
+  writeEntry,
+  pruneExpiredEntries,
+} from './lib/placesSearchCache';
 import { usePlaceMarks } from './hooks/usePlaceMarks';
 
 async function enrichWithDetails(placesIn: Place[], limit = 15): Promise<Place[]> {
@@ -30,7 +39,7 @@ const App: React.FC = () => {
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [places, setPlaces] = useState<Place[]>([]);
   const placesRef = useRef<Place[]>([]);
-  const latestFetchId = useRef(0);
+  const placesOpGen = useRef(0);
   const [maxFetchedRadius, setMaxFetchedRadius] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -44,54 +53,112 @@ const App: React.FC = () => {
     placesRef.current = places;
   }, [places]);
 
-  const loadPlacesFresh = async (lat: number, lng: number, rad: number, searchKeyword?: string) => {
-    const fetchId = ++latestFetchId.current;
+  useEffect(() => {
+    pruneExpiredEntries();
+  }, []);
+
+  const loadPlacesFresh = useCallback(async (lat: number, lng: number, rad: number, searchKeyword?: string) => {
+    const opGen = ++placesOpGen.current;
+    const kw = searchKeyword !== undefined ? searchKeyword : keyword;
+    const cacheKey = buildSearchKey(lat, lng, kw);
+    const now = Date.now();
+    const cached = readEntry(cacheKey);
+
+    if (cached && now - cached.savedAt < MAX_RETENTION_MS) {
+      if (opGen !== placesOpGen.current) return;
+      setPlaces(cached.places);
+      setMaxFetchedRadius(cached.maxFetchedRadius);
+      setError(null);
+
+      if (now - cached.savedAt < FRESH_MS) {
+        setLoading(false);
+        return;
+      }
+
+      setLoading(false);
+      const fetchR = Math.max(rad, cached.maxFetchedRadius);
+      void (async () => {
+        try {
+          const response = await fetch(
+            `/api/places?lat=${lat}&lng=${lng}&radius=${fetchR}&type=establishment${kw ? `&keyword=${encodeURIComponent(kw)}` : ''}`
+          );
+          const data = await response.json();
+          if (opGen !== placesOpGen.current) return;
+          if (!Array.isArray(data)) {
+            if (data && typeof data === 'object' && 'error' in data && data.error) {
+              setError(String(data.error));
+            }
+            return;
+          }
+          const mergedRaw = mergePlacesById(data as Place[], cached.places);
+          const detailedPlaces = await enrichWithDetails(mergedRaw, 15);
+          if (opGen !== placesOpGen.current) return;
+          setPlaces(detailedPlaces);
+          setMaxFetchedRadius(fetchR);
+          setError(null);
+          writeEntry(cacheKey, detailedPlaces, fetchR);
+        } catch (err) {
+          console.error('Revalidate places:', err);
+        }
+      })();
+      return;
+    }
+
+    if (opGen !== placesOpGen.current) return;
     setLoading(true);
     setMaxFetchedRadius(0);
     try {
-      const kw = searchKeyword !== undefined ? searchKeyword : keyword;
-      const response = await fetch(`/api/places?lat=${lat}&lng=${lng}&radius=${rad}&type=establishment${kw ? `&keyword=${encodeURIComponent(kw)}` : ''}`);
+      const response = await fetch(
+        `/api/places?lat=${lat}&lng=${lng}&radius=${rad}&type=establishment${kw ? `&keyword=${encodeURIComponent(kw)}` : ''}`
+      );
       const data = await response.json();
 
-      if (fetchId !== latestFetchId.current) return;
+      if (opGen !== placesOpGen.current) return;
 
       if (!Array.isArray(data)) {
         console.error('API returned non-array data:', data);
         setPlaces([]);
-        if (data.error) setError(data.error);
+        if (data && typeof data === 'object' && 'error' in data && data.error) {
+          setError(String(data.error));
+        }
         return;
       }
 
       const detailedPlaces = await enrichWithDetails(data, 15);
-      if (fetchId !== latestFetchId.current) return;
+      if (opGen !== placesOpGen.current) return;
       setPlaces(detailedPlaces);
       setMaxFetchedRadius(rad);
       setError(null);
+      writeEntry(cacheKey, detailedPlaces, rad);
     } catch (err) {
       console.error('Error fetching places:', err);
-      if (fetchId === latestFetchId.current) {
+      if (opGen === placesOpGen.current) {
         setError('Não foi possível carregar os estabelecimentos próximos.');
       }
     } finally {
-      if (fetchId === latestFetchId.current) {
+      if (opGen === placesOpGen.current) {
         setLoading(false);
       }
     }
-  };
+  }, [keyword]);
 
-  const expandPlacesRadius = async (lat: number, lng: number, rad: number, searchKeyword?: string) => {
-    const fetchId = ++latestFetchId.current;
+  const expandPlacesRadius = useCallback(async (lat: number, lng: number, rad: number, searchKeyword?: string) => {
+    const opGen = ++placesOpGen.current;
     setLoading(true);
     try {
       const kw = searchKeyword !== undefined ? searchKeyword : keyword;
-      const response = await fetch(`/api/places?lat=${lat}&lng=${lng}&radius=${rad}&type=establishment${kw ? `&keyword=${encodeURIComponent(kw)}` : ''}`);
+      const response = await fetch(
+        `/api/places?lat=${lat}&lng=${lng}&radius=${rad}&type=establishment${kw ? `&keyword=${encodeURIComponent(kw)}` : ''}`
+      );
       const data = await response.json();
 
-      if (fetchId !== latestFetchId.current) return;
+      if (opGen !== placesOpGen.current) return;
 
       if (!Array.isArray(data)) {
         console.error('API returned non-array data:', data);
-        if (data.error) setError(data.error);
+        if (data && typeof data === 'object' && 'error' in data && data.error) {
+          setError(String(data.error));
+        }
         return;
       }
 
@@ -99,21 +166,23 @@ const App: React.FC = () => {
       const prevIds = new Set(prev.map((p) => p.place_id));
       const newRaw = data.filter((p: Place) => !prevIds.has(p.place_id)) as Place[];
       const enrichedNew = newRaw.length > 0 ? await enrichWithDetails(newRaw, 15) : [];
-      if (fetchId !== latestFetchId.current) return;
-      setPlaces([...prev, ...enrichedNew]);
+      if (opGen !== placesOpGen.current) return;
+      const merged = [...prev, ...enrichedNew];
+      setPlaces(merged);
       setMaxFetchedRadius(rad);
       setError(null);
+      writeEntry(buildSearchKey(lat, lng, kw), merged, rad);
     } catch (err) {
       console.error('Error fetching places:', err);
-      if (fetchId === latestFetchId.current) {
+      if (opGen === placesOpGen.current) {
         setError('Não foi possível carregar os estabelecimentos próximos.');
       }
     } finally {
-      if (fetchId === latestFetchId.current) {
+      if (opGen === placesOpGen.current) {
         setLoading(false);
       }
     }
-  };
+  }, [keyword]);
 
   const detectLocation = useCallback(() => {
     const defaultLocation = { lat: -19.9191, lng: -43.9386 }; // Belo Horizonte
