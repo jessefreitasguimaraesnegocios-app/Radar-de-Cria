@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import debounce from 'lodash.debounce';
 import { MapPin, Navigation as NavigationIcon, Loader2, AlertCircle, Info, Target } from 'lucide-react';
 import Map from './components/Map';
 import PlaceCard from './components/PlaceCard';
@@ -36,7 +35,6 @@ const App: React.FC = () => {
   const [radius, setRadius] = useState(5000);
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
   const [keyword, setKeyword] = useState('');
 
   useEffect(() => {
@@ -162,25 +160,30 @@ const App: React.FC = () => {
     }
   };
 
-  const handleSearch = useCallback(
-    debounce(async (query: string) => {
-      if (!query) return;
-      setLoading(true);
-      try {
-        const response = await fetch(`/api/geocode?query=${encodeURIComponent(query)}`);
-        const data = await response.json();
-        if (data.lat && data.lng) {
-          setUserLocation({ lat: data.lat, lng: data.lng });
-          loadPlacesFresh(data.lat, data.lng, radius);
-        }
-      } catch (err) {
-        console.error('Search error:', err);
-      } finally {
-        setLoading(false);
+  const handleCitySearch = async (raw: string) => {
+    const q = raw.trim();
+    if (!q) {
+      setError('Digite uma cidade, bairro ou endereço e clique no botão ao lado (ou Enter).');
+      return;
+    }
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`/api/geocode?query=${encodeURIComponent(q)}`);
+      const data = await response.json();
+      if (data.lat && data.lng) {
+        setUserLocation({ lat: data.lat, lng: data.lng });
+        await loadPlacesFresh(data.lat, data.lng, radius);
+      } else {
+        setError('Não encontramos este local. Tente outro nome ou cidade.');
       }
-    }, 1000),
-    [radius]
-  );
+    } catch (err) {
+      console.error('Search error:', err);
+      setError('Não foi possível localizar. Tente de novo.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const withinRadius =
     userLocation == null
@@ -263,8 +266,7 @@ const App: React.FC = () => {
         <Filters
           radius={radius}
           onRadiusChange={handleRadiusChange}
-          onSearch={handleSearch}
-          onDetectLocation={detectLocation}
+          onCitySearch={handleCitySearch}
           onKeywordSearch={handleKeywordSearch}
           onFilterChange={setActiveFilter}
           activeFilter={activeFilter}

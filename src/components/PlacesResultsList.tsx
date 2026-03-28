@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ExternalLink,
   Smartphone,
@@ -37,8 +37,34 @@ interface PlacesResultsListProps {
   onOpenPlace: (placeId: string) => void;
 }
 
+/** Chave única por linha da tabela (evita marcar várias linhas quando place_id repete ou falta). */
+function computeRowMarkKeys(placesIn: Place[]): string[] {
+  const counts = new Map<string, number>();
+  for (const p of placesIn) {
+    const id = (p.place_id && String(p.place_id).trim()) || '';
+    counts.set(id, (counts.get(id) ?? 0) + 1);
+  }
+
+  return placesIn.map((p, index) => {
+    const id = (p.place_id && String(p.place_id).trim()) || '';
+    if (id && (counts.get(id) ?? 0) === 1) {
+      return id;
+    }
+    if (id) {
+      return `${id}::__row${index}`;
+    }
+    const loc = p.geometry?.location;
+    if (loc != null && typeof loc.lat === 'number' && typeof loc.lng === 'number') {
+      return `geo:${index}:${loc.lat.toFixed(6)},${loc.lng.toFixed(6)}`;
+    }
+    return `row:${index}:${(p.name || 'place').slice(0, 40)}`;
+  });
+}
+
 const PlacesResultsList: React.FC<PlacesResultsListProps> = ({ places, onOpenPlace }) => {
   const [marks, setMarks] = useState<Record<string, PlaceMarkColor>>({});
+
+  const rowMarkKeys = useMemo(() => computeRowMarkKeys(places), [places]);
 
   useEffect(() => {
     setMarks(loadMarksFromStorage());
@@ -97,8 +123,9 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({ places, onOpenPla
             </tr>
           </thead>
           <tbody>
-            {places.map((place) => {
-              const mark = marks[place.place_id];
+            {places.map((place, index) => {
+              const markKey = rowMarkKeys[index] ?? `row:${index}`;
+              const mark = marks[markKey];
               const addr = place.formatted_address || place.vicinity || '—';
               const rowTint =
                 mark === 'red'
@@ -111,7 +138,7 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({ places, onOpenPla
 
               return (
                 <tr
-                  key={place.place_id}
+                  key={markKey}
                   className={`border-b border-gray-100 last:border-0 align-top ${rowTint}`}
                 >
                   <td className="px-3 py-3 font-bold text-gray-900">
@@ -212,7 +239,11 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({ places, onOpenPla
                             key={key}
                             type="button"
                             title={key === 'red' ? 'Vermelho' : key === 'yellow' ? 'Amarelo' : 'Verde'}
-                            onClick={() => setMark(place.place_id, mark === key ? null : key)}
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setMark(markKey, mark === key ? null : key);
+                            }}
                             className={`h-9 w-9 rounded-lg transition-all ${
                               mark === key
                                 ? `${className} ring-2 ring-offset-2 ring-gray-900 scale-105`
@@ -225,7 +256,11 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({ places, onOpenPla
                       {mark && (
                         <button
                           type="button"
-                          onClick={() => setMark(place.place_id, null)}
+                          onClick={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            setMark(markKey, null);
+                          }}
                           className="text-[10px] font-black uppercase text-gray-500 hover:text-gray-800 underline"
                         >
                           Limpar

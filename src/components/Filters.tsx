@@ -4,8 +4,8 @@ import { Search, MapPin, Navigation as NavigationIcon } from 'lucide-react';
 interface FiltersProps {
   radius: number;
   onRadiusChange: (radius: number) => void;
-  onSearch: (query: string) => void;
-  onDetectLocation: () => void;
+  /** Geocodifica o texto do campo “Cidade” e centraliza o mapa (Enter ou botão). */
+  onCitySearch: (query: string) => void;
   onKeywordSearch: (keyword: string) => void;
   onFilterChange: (filter: string) => void;
   activeFilter: string;
@@ -14,8 +14,7 @@ interface FiltersProps {
 const Filters: React.FC<FiltersProps> = ({
   radius,
   onRadiusChange,
-  onSearch,
-  onDetectLocation,
+  onCitySearch,
   onFilterChange,
   activeFilter,
   onKeywordSearch,
@@ -25,7 +24,7 @@ const Filters: React.FC<FiltersProps> = ({
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
-      onSearch(query);
+      onCitySearch(query);
     }
   };
 
@@ -73,9 +72,10 @@ const Filters: React.FC<FiltersProps> = ({
             />
           </div>
           <button
-            onClick={onDetectLocation}
-            className="bg-gray-100 text-gray-600 p-3 rounded-xl hover:bg-gray-200 transition-all active:scale-95"
-            title="Detectar minha localização"
+            type="button"
+            onClick={() => onCitySearch(query)}
+            className="bg-blue-600 text-white p-3 rounded-xl hover:bg-blue-700 transition-all active:scale-95 shadow-md shadow-blue-200"
+            title="Buscar este local no mapa (geocodificar)"
           >
             <NavigationIcon className="w-6 h-6" />
           </button>
