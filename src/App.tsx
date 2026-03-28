@@ -32,7 +32,7 @@ const App: React.FC = () => {
   const placesRef = useRef<Place[]>([]);
   const latestFetchId = useRef(0);
   const [maxFetchedRadius, setMaxFetchedRadius] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [radius, setRadius] = useState(5000);
   const [activeFilter, setActiveFilter] = useState('all');
@@ -125,32 +125,28 @@ const App: React.FC = () => {
         (position) => {
           const { latitude, longitude } = position.coords;
           setUserLocation({ lat: latitude, lng: longitude });
-          loadPlacesFresh(latitude, longitude, radius);
+          setLoading(false);
         },
         (err) => {
           console.error('Geolocation error:', err);
-          setError('Não conseguimos detectar sua localização automaticamente. Usando Belo Horizonte como padrão, mas você pode buscar sua cidade no campo abaixo.');
+          setError(
+            'Não conseguimos detectar sua localização. O mapa usa Belo Horizonte como referência; busque uma cidade ou toque em Buscar por segmento quando quiser listar negócios.'
+          );
           setUserLocation(defaultLocation);
-          loadPlacesFresh(defaultLocation.lat, defaultLocation.lng, radius);
           setLoading(false);
         },
         { timeout: 10000, enableHighAccuracy: true }
       );
     } else {
-      setError('Geolocalização não suportada. Busque sua cidade manualmente.');
+      setError('Geolocalização não suportada. Busque sua cidade no campo abaixo.');
       setUserLocation(defaultLocation);
-      loadPlacesFresh(defaultLocation.lat, defaultLocation.lng, radius);
       setLoading(false);
     }
-  }, [radius, keyword]);
-
-  useEffect(() => {
-    detectLocation();
   }, []);
 
   const handleRadiusChange = (newRadius: number) => {
     setRadius(newRadius);
-    if (!userLocation) return;
+    if (!userLocation || maxFetchedRadius === 0) return;
     if (newRadius > maxFetchedRadius) {
       void expandPlacesRadius(userLocation.lat, userLocation.lng, newRadius);
     }
@@ -159,7 +155,9 @@ const App: React.FC = () => {
   const handleKeywordSearch = (newKeyword: string) => {
     setKeyword(newKeyword);
     if (userLocation) {
-      loadPlacesFresh(userLocation.lat, userLocation.lng, radius, newKeyword);
+      void loadPlacesFresh(userLocation.lat, userLocation.lng, radius, newKeyword);
+    } else {
+      setError('Defina um ponto no mapa: busque uma cidade ou use “Localização atual” no topo.');
     }
   };
 
@@ -233,15 +231,15 @@ const App: React.FC = () => {
           </div>
           
           <div className="flex items-center gap-4">
-            {userLocation && (
-              <button 
-                onClick={detectLocation}
-                className="hidden md:flex items-center gap-2 text-sm font-bold text-blue-600 bg-blue-50 px-4 py-2 rounded-full hover:bg-blue-100 transition-all active:scale-95 border border-blue-100"
-              >
-                <MapPin className="w-4 h-4" />
-                <span>Localização atual</span>
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={() => detectLocation()}
+              className="flex items-center gap-2 text-sm font-bold text-blue-600 bg-blue-50 px-4 py-2 rounded-full hover:bg-blue-100 transition-all active:scale-95 border border-blue-100"
+            >
+              <MapPin className="w-4 h-4" />
+              <span className="hidden sm:inline">{userLocation ? 'Atualizar GPS' : 'Localização atual'}</span>
+              <span className="sm:hidden">GPS</span>
+            </button>
           </div>
         </div>
       </header>
@@ -254,7 +252,9 @@ const App: React.FC = () => {
             <p className="text-blue-900/90 leading-relaxed">
               Busque por tipo de negócio (ex.: <strong>barbearia</strong>, <strong>bar</strong>, <strong>restaurante</strong>).
               Use <strong>Sem app próprio</strong> para quem pode receber seu app; <strong>Sem site</strong> para oferecer site ou
-              cardápio online. Marque na lista (verde / amarelo / vermelho): o pino no mapa acompanha a cor; sua posição fica em amarelo.
+              cardápio online. Pinos: você em <strong>azul</strong>; buscas em <strong>vermelho</strong> até
+              qualificar — <strong>amarelo</strong> (potencial), <strong>verde</strong> (vendeu),{' '}
+              <strong>vermelho</strong> (sem potencial / não vendeu).
             </p>
           </div>
         </div>
@@ -270,8 +270,13 @@ const App: React.FC = () => {
               onPlaceSelect={(place) => setSelectedPlaceId(place.place_id)}
             />
           ) : (
-            <div className="w-full h-64 md:h-96 bg-gray-200 rounded-xl flex items-center justify-center animate-pulse">
-              <p className="text-gray-400 font-bold">Aguardando localização...</p>
+            <div className="w-full h-64 md:h-96 rounded-xl border border-dashed border-gray-300 bg-gray-50 flex flex-col items-center justify-center gap-3 px-6 text-center">
+              <MapPin className="w-10 h-10 text-gray-400" />
+              <p className="text-gray-800 font-black text-sm">Mapa</p>
+              <p className="text-gray-600 text-sm max-w-md leading-relaxed">
+                Busque uma cidade abaixo ou use <strong className="text-gray-800">Localização atual</strong> no topo. Os
+                estabelecimentos só são buscados quando você buscar por cidade ou por segmento.
+              </p>
             </div>
           )}
         </div>
@@ -324,6 +329,17 @@ const App: React.FC = () => {
                     onOpenPlace={(id) => setSelectedPlaceId(id)}
                   />
                 </>
+              ) : maxFetchedRadius === 0 ? (
+                <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
+                  <div className="bg-gray-100 p-6 rounded-full">
+                    <Info className="w-12 h-12 text-gray-400" />
+                  </div>
+                  <h3 className="text-xl font-black text-gray-900">Nenhuma busca ainda</h3>
+                  <p className="text-gray-500 max-w-sm leading-relaxed">
+                    Defina o mapa (cidade ou GPS) e depois busque por segmento, ou use o botão de cidade para buscar
+                    estabelecimentos na região.
+                  </p>
+                </div>
               ) : (
                 <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
                   <div className="bg-gray-100 p-6 rounded-full">
