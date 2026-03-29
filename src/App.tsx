@@ -6,6 +6,7 @@ import PlaceCard from './components/PlaceCard';
 import Filters from './components/Filters';
 import PlaceDetails from './components/PlaceDetails';
 import PlacesResultsList from './components/PlacesResultsList';
+import InstallAppCta from './components/InstallAppCta';
 import { Place, UserLocation } from './types';
 import { distanceMeters } from './lib/geo';
 import { computeRowMarkKeys } from './lib/placeMarks';
@@ -312,6 +313,8 @@ const App: React.FC = () => {
           </div>
         </div>
       </header>
+
+      <InstallAppCta />
 
       <main className="max-w-7xl mx-auto px-4 py-8 md:px-8">
         <div className="mb-6 flex gap-3 rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-sm text-blue-950">
