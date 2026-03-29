@@ -35,10 +35,7 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({
   if (places.length === 0) return null;
 
   return (
-    <section
-      id="places-results-list"
-      className="mt-14 mb-8 scroll-mt-28"
-    >
+    <section className="mt-14 mb-8 scroll-mt-28 hidden md:block">
       <div className="flex items-center gap-2 mb-4">
         <div className="bg-emerald-600 p-2 rounded-xl text-white">
           <ListChecks className="w-5 h-5" />

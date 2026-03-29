@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { AnimatePresence } from 'motion/react';
 import { MapPin, Navigation as NavigationIcon, Loader2, AlertCircle, Info, Target } from 'lucide-react';
 import Map from './components/Map';
 import PlaceCard from './components/PlaceCard';
 import Filters from './components/Filters';
 import PlaceDetails from './components/PlaceDetails';
 import PlacesResultsList from './components/PlacesResultsList';
+import MobilePlacesCarousel from './components/MobilePlacesCarousel';
 import InstallAppCta from './components/InstallAppCta';
 import { Place, UserLocation } from './types';
 import { distanceMeters } from './lib/geo';
@@ -316,8 +317,8 @@ const App: React.FC = () => {
 
       <InstallAppCta />
 
-      <main className="max-w-7xl mx-auto px-4 py-8 md:px-8">
-        <div className="mb-6 flex gap-3 rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-sm text-blue-950">
+      <main className="max-w-7xl mx-auto px-4 py-8 md:px-8 flex flex-col">
+        <div className="order-1 mb-6 flex gap-3 rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-sm text-blue-950">
           <Target className="w-5 h-5 shrink-0 text-blue-600 mt-0.5" />
           <div>
             <p className="font-black text-blue-900 text-xs uppercase tracking-wide mb-1">Prospecção</p>
@@ -331,8 +332,29 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Map Section */}
-        <div className="mb-8">
+        <div className="order-2 md:order-3 mb-8">
+          <Filters
+            radius={radius}
+            onRadiusChange={handleRadiusChange}
+            onCitySearch={handleCitySearch}
+            onKeywordSearch={handleKeywordSearch}
+            onFilterChange={setActiveFilter}
+            activeFilter={activeFilter}
+            resultCount={filteredPlaces.length}
+            loading={loading}
+            onScrollToList={scrollToResultsList}
+          />
+        </div>
+
+        {error && (
+          <div className="order-3 md:order-4 bg-red-50 border border-red-100 p-4 rounded-2xl flex items-center gap-3 text-red-700 mb-8">
+            <AlertCircle className="w-6 h-6" />
+            <p className="font-bold">{error}</p>
+          </div>
+        )}
+
+        {/* Map Section — no mobile fica depois da lista em carrossel */}
+        <div className="order-5 md:order-2 mb-8">
           {userLocation ? (
             <Map
               userLocation={userLocation}
@@ -353,29 +375,8 @@ const App: React.FC = () => {
           )}
         </div>
 
-        {/* Filters */}
-        <Filters
-          radius={radius}
-          onRadiusChange={handleRadiusChange}
-          onCitySearch={handleCitySearch}
-          onKeywordSearch={handleKeywordSearch}
-          onFilterChange={setActiveFilter}
-          activeFilter={activeFilter}
-          resultCount={filteredPlaces.length}
-          loading={loading}
-          onScrollToList={scrollToResultsList}
-        />
-
-        {/* Error State */}
-        {error && (
-          <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-center gap-3 text-red-700 mb-8">
-            <AlertCircle className="w-6 h-6" />
-            <p className="font-bold">{error}</p>
-          </div>
-        )}
-
-        {/* Places Grid */}
-        <div className="relative">
+        {/* Lista: carrossel no mobile (antes do mapa); grid + tabela no md+ */}
+        <div id="places-results-list" className="order-4 md:order-5 relative scroll-mt-28">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-20 gap-4">
               <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
@@ -385,7 +386,13 @@ const App: React.FC = () => {
             <>
               {filteredPlaces.length > 0 ? (
                 <>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  <MobilePlacesCarousel
+                    places={filteredPlaces}
+                    marks={marks}
+                    setMark={setMark}
+                    onOpenPlace={(id) => setSelectedPlaceId(id)}
+                  />
+                  <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                     {filteredPlaces.map((place) => (
                       <PlaceCard
                         key={place.place_id}
