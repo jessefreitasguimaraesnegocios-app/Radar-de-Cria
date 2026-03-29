@@ -23,25 +23,38 @@ export default defineConfig(({mode}) => {
       tailwindcss(),
       VitePWA({
         registerType: 'autoUpdate',
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
+        includeAssets: ['pwa-192x192.png', 'pwa-512x512.png', 'apple-touch-icon.png', 'mask-icon.svg'],
         manifest: {
-          name: 'Radar de Cria',
+          name: 'Radar de Cria — Mapa do Tesouro',
           short_name: 'Radar de Cria',
-          description: 'Encontre estabelecimentos próximos com inteligência.',
-          theme_color: '#ffffff',
+          description:
+            'Varredura de negócios por região e segmento: seu mapa do tesouro para prospecção (app, site, WhatsApp).',
+          theme_color: '#0f2726',
+          background_color: '#0a1a19',
+          display: 'standalone',
+          orientation: 'portrait-primary',
+          lang: 'pt-BR',
           icons: [
             {
               src: 'pwa-192x192.png',
               sizes: '192x192',
-              type: 'image/png'
+              type: 'image/png',
+              purpose: 'any',
             },
             {
               src: 'pwa-512x512.png',
               sizes: '512x512',
-              type: 'image/png'
-            }
-          ]
-        }
+              type: 'image/png',
+              purpose: 'any',
+            },
+            {
+              src: 'pwa-512x512.png',
+              sizes: '512x512',
+              type: 'image/png',
+              purpose: 'maskable',
+            },
+          ],
+        },
       })
     ],
     define: {
