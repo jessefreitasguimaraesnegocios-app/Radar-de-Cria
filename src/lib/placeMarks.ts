@@ -27,6 +27,47 @@ export function saveMarksToStorage(marks: Record<string, PlaceMarkColor>): void 
   }
 }
 
+/** Totais alinhados aos pinos: verde/amarelo marcados; vermelho no mapa = sem marca + marca vermelha explícita. */
+export type MarkPinTotals = {
+  green: number;
+  yellow: number;
+  /** Pinos vermelhos no mapa (padrão + explícito). */
+  redOnMap: number;
+  /** Só marca “sem potencial” escolhida pelo usuário. */
+  explicitRed: number;
+  /** Ainda sem classificar no funil (pino vermelho padrão). */
+  unmarked: number;
+  total: number;
+};
+
+export function computeMarkPinTotals(
+  places: { place_id?: string }[],
+  rowMarkKeys: string[],
+  marks: Record<string, PlaceMarkColor>
+): MarkPinTotals {
+  let green = 0;
+  let yellow = 0;
+  let explicitRed = 0;
+  let unmarked = 0;
+  places.forEach((_, i) => {
+    const mk = rowMarkKeys[i] ?? `row:${i}`;
+    const m = marks[mk];
+    if (m === 'green') green += 1;
+    else if (m === 'yellow') yellow += 1;
+    else if (m === 'red') explicitRed += 1;
+    else unmarked += 1;
+  });
+  const total = places.length;
+  return {
+    green,
+    yellow,
+    redOnMap: explicitRed + unmarked,
+    explicitRed,
+    unmarked,
+    total,
+  };
+}
+
 /** Chave única por linha (lista + mapa alinhados). */
 export function computeRowMarkKeys(placesIn: { place_id?: string; name?: string; geometry?: { location?: { lat: number; lng: number } } }[]): string[] {
   const counts = new Map<string, number>();

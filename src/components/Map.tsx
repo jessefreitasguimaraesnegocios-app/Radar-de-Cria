@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { twMerge } from 'tailwind-merge';
@@ -60,6 +60,10 @@ const Map: React.FC<MapProps> = ({
       map.current.setCenter([userLocation.lng, userLocation.lat]);
     }
   }, [userLocation]);
+
+  useLayoutEffect(() => {
+    map.current?.resize();
+  }, [containerClassName, userLocation.lat, userLocation.lng, places.length]);
 
   useEffect(() => {
     if (map.current) {

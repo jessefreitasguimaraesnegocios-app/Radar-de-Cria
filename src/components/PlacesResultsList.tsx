@@ -10,8 +10,9 @@ import {
   Phone,
 } from 'lucide-react';
 import { Place } from '../types';
-import { computeRowMarkKeys, type PlaceMarkColor } from '../lib/placeMarks';
+import { computeRowMarkKeys, computeMarkPinTotals, type PlaceMarkColor } from '../lib/placeMarks';
 import { MarkColorButtons } from './MarkColorButtons';
+import { MarkTotalsBar } from './MarkTotalsBar';
 
 export type { PlaceMarkColor };
 
@@ -29,6 +30,10 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({
   setMark,
 }) => {
   const rowMarkKeys = React.useMemo(() => computeRowMarkKeys(places), [places]);
+  const markPinTotals = React.useMemo(
+    () => computeMarkPinTotals(places, rowMarkKeys, marks),
+    [places, rowMarkKeys, marks]
+  );
 
   if (places.length === 0) return null;
 
@@ -53,6 +58,8 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({
           </p>
         </div>
       </div>
+
+      <MarkTotalsBar totals={markPinTotals} className="mb-4" />
 
       <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
         <table className="min-w-[960px] w-full text-left text-sm">

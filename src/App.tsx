@@ -18,7 +18,8 @@ import PlacesResultsList from './components/PlacesResultsList';
 import InstallAppCta from './components/InstallAppCta';
 import { Place, UserLocation } from './types';
 import { distanceMeters } from './lib/geo';
-import { computeRowMarkKeys } from './lib/placeMarks';
+import { computeRowMarkKeys, computeMarkPinTotals } from './lib/placeMarks';
+import { MarkTotalsBar } from './components/MarkTotalsBar';
 import {
   buildSearchKey,
   FRESH_MS,
@@ -29,7 +30,7 @@ import {
   pruneExpiredEntries,
 } from './lib/placesSearchCache';
 import { usePlaceMarks } from './hooks/usePlaceMarks';
-import type { PlaceMarkColor } from './lib/placeMarks';
+import type { PlaceMarkColor, MarkPinTotals } from './lib/placeMarks';
 
 async function enrichWithDetails(placesIn: Place[], limit = 15): Promise<Place[]> {
   const head = placesIn.slice(0, limit);
@@ -53,6 +54,7 @@ type PlacesResultsBodyProps = {
   marks: Record<string, PlaceMarkColor>;
   setMark: (id: string, color: PlaceMarkColor | null) => void;
   onOpenPlace: (id: string) => void;
+  markPinTotals: MarkPinTotals;
 };
 
 const PlacesResultsBody: React.FC<PlacesResultsBodyProps> = ({
@@ -62,6 +64,7 @@ const PlacesResultsBody: React.FC<PlacesResultsBodyProps> = ({
   marks,
   setMark,
   onOpenPlace,
+  markPinTotals,
 }) => {
   const rowMarkKeys = useMemo(() => computeRowMarkKeys(filteredPlaces), [filteredPlaces]);
 
@@ -77,6 +80,7 @@ const PlacesResultsBody: React.FC<PlacesResultsBodyProps> = ({
     return (
       <>
         <div className="md:hidden mb-2">
+          <MarkTotalsBar totals={markPinTotals} compact className="mb-3" />
           <p className="text-[11px] font-black uppercase tracking-wide text-gray-500 px-1 mb-3">
             Deslize para o lado · marque o funil em cada card
           </p>
@@ -384,6 +388,10 @@ const App: React.FC = () => {
   });
 
   const rowMarkKeys = useMemo(() => computeRowMarkKeys(filteredPlaces), [filteredPlaces]);
+  const markPinTotals = useMemo(
+    () => computeMarkPinTotals(filteredPlaces, rowMarkKeys, marks),
+    [filteredPlaces, rowMarkKeys, marks]
+  );
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900 font-sans selection:bg-blue-100 selection:text-blue-900">
@@ -436,13 +444,16 @@ const App: React.FC = () => {
         {/* Desktop: mapa acima dos filtros */}
         <div className="hidden md:block mb-8">
           {userLocation ? (
-            <Map
-              userLocation={userLocation}
-              places={filteredPlaces}
-              rowMarkKeys={rowMarkKeys}
-              marks={marks}
-              onPlaceSelect={(place) => setSelectedPlaceId(place.place_id)}
-            />
+            <div className="flex flex-col gap-3">
+              <Map
+                userLocation={userLocation}
+                places={filteredPlaces}
+                rowMarkKeys={rowMarkKeys}
+                marks={marks}
+                onPlaceSelect={(place) => setSelectedPlaceId(place.place_id)}
+              />
+              <MarkTotalsBar totals={markPinTotals} />
+            </div>
           ) : (
             <div className="w-full h-64 md:h-96 rounded-xl border border-dashed border-gray-300 bg-gray-50 flex flex-col items-center justify-center gap-3 px-6 text-center">
               <MapPin className="w-10 h-10 text-gray-400" />
@@ -511,18 +522,21 @@ const App: React.FC = () => {
                 mobilePanel === 'map' ? 'translate-x-0' : '-translate-x-1/2'
               }`}
             >
-              <div className="w-1/2 shrink-0 min-w-[50%] p-2 box-border">
+              <div className="w-1/2 shrink-0 min-w-[50%] p-2 box-border flex flex-col gap-2">
                 {userLocation ? (
-                  <Map
-                    userLocation={userLocation}
-                    places={filteredPlaces}
-                    rowMarkKeys={rowMarkKeys}
-                    marks={marks}
-                    onPlaceSelect={(place) => setSelectedPlaceId(place.place_id)}
-                    containerClassName="h-[min(46vh,380px)] min-h-[200px] max-h-[420px] shadow-md"
-                  />
+                  <>
+                    <Map
+                      userLocation={userLocation}
+                      places={filteredPlaces}
+                      rowMarkKeys={rowMarkKeys}
+                      marks={marks}
+                      onPlaceSelect={(place) => setSelectedPlaceId(place.place_id)}
+                      containerClassName="h-[min(72dvh,620px)] min-h-[300px] w-full shadow-md"
+                    />
+                    <MarkTotalsBar totals={markPinTotals} compact className="shrink-0" />
+                  </>
                 ) : (
-                  <div className="w-full min-h-[200px] h-[min(46vh,380px)] rounded-xl border border-dashed border-gray-300 bg-gray-50 flex flex-col items-center justify-center gap-2 px-4 text-center">
+                  <div className="w-full min-h-[300px] h-[min(72dvh,620px)] rounded-xl border border-dashed border-gray-300 bg-gray-50 flex flex-col items-center justify-center gap-2 px-4 text-center">
                     <MapPin className="w-9 h-9 text-gray-400" />
                     <p className="text-gray-800 font-black text-sm">Mapa</p>
                     <p className="text-gray-600 text-xs leading-relaxed">
@@ -539,6 +553,7 @@ const App: React.FC = () => {
                   marks={marks}
                   setMark={setMark}
                   onOpenPlace={(id) => setSelectedPlaceId(id)}
+                  markPinTotals={markPinTotals}
                 />
               </div>
             </div>
@@ -554,6 +569,7 @@ const App: React.FC = () => {
             marks={marks}
             setMark={setMark}
             onOpenPlace={(id) => setSelectedPlaceId(id)}
+            markPinTotals={markPinTotals}
           />
         </div>
       </main>
