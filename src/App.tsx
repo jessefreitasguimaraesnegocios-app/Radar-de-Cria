@@ -336,12 +336,15 @@ const App: React.FC = () => {
 
   const scrollToResultsList = useCallback(() => {
     setMobilePanel('lista');
-    requestAnimationFrame(() => {
-      document.getElementById('places-results-list')?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      });
-    });
+    const runScroll = () => {
+      if (typeof window !== 'undefined' && window.matchMedia('(min-width: 768px)').matches) {
+        document.getElementById('places-results-list')?.scrollIntoView({
+          behavior: 'smooth',
+          block: 'start',
+        });
+      }
+    };
+    requestAnimationFrame(() => requestAnimationFrame(runScroll));
   }, []);
 
   const handleCitySearch = async (raw: string) => {
@@ -426,7 +429,7 @@ const App: React.FC = () => {
 
       <InstallAppCta />
 
-      <main className="max-w-7xl mx-auto px-4 py-8 md:px-8">
+      <main className="max-w-7xl mx-auto px-4 py-4 md:py-8 md:px-8">
         <div className="mb-6 flex gap-3 rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-sm text-blue-950">
           <Target className="w-5 h-5 shrink-0 text-blue-600 mt-0.5" />
           <div>
@@ -488,7 +491,7 @@ const App: React.FC = () => {
         )}
 
         {/* Mobile: mapa e lista em “páginas” lado a lado (abas + deslize) */}
-        <div className="md:hidden mb-8">
+        <div className="md:hidden mb-3">
           <div className="flex rounded-2xl bg-gray-100/90 p-1.5 border border-gray-200 mb-4 shadow-inner">
             <button
               type="button"
@@ -516,36 +519,42 @@ const App: React.FC = () => {
             </button>
           </div>
 
-          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50/50 shadow-sm">
+          <div className="relative overflow-hidden rounded-2xl border border-gray-200 bg-gray-50/50 shadow-sm h-[calc(100svh-9.5rem)] min-h-[340px]">
             <div
-              className={`flex w-[200%] transition-transform duration-300 ease-out will-change-transform ${
-                mobilePanel === 'map' ? 'translate-x-0' : '-translate-x-1/2'
+              className={`absolute inset-0 z-10 flex min-h-0 flex-col gap-2 p-2 box-border ${
+                mobilePanel === 'map' ? 'flex' : 'hidden'
               }`}
+              aria-hidden={mobilePanel !== 'map'}
             >
-              <div className="w-1/2 shrink-0 min-w-[50%] p-2 box-border flex flex-col gap-2">
-                {userLocation ? (
-                  <>
-                    <Map
-                      userLocation={userLocation}
-                      places={filteredPlaces}
-                      rowMarkKeys={rowMarkKeys}
-                      marks={marks}
-                      onPlaceSelect={(place) => setSelectedPlaceId(place.place_id)}
-                      containerClassName="h-[min(72dvh,620px)] min-h-[300px] w-full shadow-md"
-                    />
-                    <MarkTotalsBar totals={markPinTotals} compact className="shrink-0" />
-                  </>
-                ) : (
-                  <div className="w-full min-h-[300px] h-[min(72dvh,620px)] rounded-xl border border-dashed border-gray-300 bg-gray-50 flex flex-col items-center justify-center gap-2 px-4 text-center">
-                    <MapPin className="w-9 h-9 text-gray-400" />
-                    <p className="text-gray-800 font-black text-sm">Mapa</p>
-                    <p className="text-gray-600 text-xs leading-relaxed">
-                      Busque cidade ou GPS; depois use a aba <strong>Lista</strong> para os resultados.
-                    </p>
-                  </div>
-                )}
-              </div>
-              <div className="w-1/2 shrink-0 min-w-[50%] max-h-[min(78dvh,640px)] overflow-y-auto overscroll-y-contain p-2 pb-6 box-border bg-white rounded-r-2xl">
+              {userLocation ? (
+                <>
+                  <Map
+                    userLocation={userLocation}
+                    places={filteredPlaces}
+                    rowMarkKeys={rowMarkKeys}
+                    marks={marks}
+                    onPlaceSelect={(place) => setSelectedPlaceId(place.place_id)}
+                    containerClassName="min-h-[200px] flex-1 w-full !h-auto min-w-0 shadow-md"
+                  />
+                  <MarkTotalsBar totals={markPinTotals} compact className="shrink-0" />
+                </>
+              ) : (
+                <div className="w-full flex-1 min-h-[200px] rounded-xl border border-dashed border-gray-300 bg-gray-50 flex flex-col items-center justify-center gap-2 px-4 text-center">
+                  <MapPin className="w-9 h-9 text-gray-400" />
+                  <p className="text-gray-800 font-black text-sm">Mapa</p>
+                  <p className="text-gray-600 text-xs leading-relaxed">
+                    Busque cidade ou GPS; depois use a aba <strong>Lista</strong> para os resultados.
+                  </p>
+                </div>
+              )}
+            </div>
+            <div
+              className={`absolute inset-0 z-10 flex min-h-0 flex-col rounded-2xl border border-gray-200 bg-white ${
+                mobilePanel === 'lista' ? 'flex' : 'hidden'
+              }`}
+              aria-hidden={mobilePanel !== 'lista'}
+            >
+              <div className="flex-1 min-h-0 overflow-y-auto overscroll-y-contain p-2 pb-4 box-border">
                 <PlacesResultsBody
                   loading={loading}
                   filteredPlaces={filteredPlaces}
@@ -575,7 +584,7 @@ const App: React.FC = () => {
       </main>
 
       {/* Footer */}
-      <footer className="bg-white border-t border-gray-100 py-12 mt-20">
+      <footer className="bg-white border-t border-gray-100 py-8 md:py-12 mt-10 md:mt-20">
         <div className="max-w-7xl mx-auto px-4 md:px-8 text-center">
           <div className="flex items-center justify-center gap-2 mb-4">
             <NavigationIcon className="w-5 h-5 text-blue-600" />
