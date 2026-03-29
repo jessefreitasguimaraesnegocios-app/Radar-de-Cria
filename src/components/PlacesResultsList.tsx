@@ -10,10 +10,8 @@ import {
   Phone,
 } from 'lucide-react';
 import { Place } from '../types';
-import {
-  computeRowMarkKeys,
-  type PlaceMarkColor,
-} from '../lib/placeMarks';
+import { computeRowMarkKeys, type PlaceMarkColor } from '../lib/placeMarks';
+import { MarkColorButtons } from './MarkColorButtons';
 
 export type { PlaceMarkColor };
 
@@ -174,53 +172,7 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({
                     </span>
                   </td>
                   <td className="px-3 py-3">
-                    <div className="flex flex-wrap items-center justify-center gap-2">
-                      <div className="flex rounded-xl border border-gray-200 bg-white p-1 shadow-sm">
-                        {(
-                          [
-                            { key: 'red' as const, className: 'bg-red-500 hover:bg-red-600' },
-                            { key: 'yellow' as const, className: 'bg-amber-400 hover:bg-amber-500' },
-                            { key: 'green' as const, className: 'bg-emerald-500 hover:bg-emerald-600' },
-                          ] as const
-                        ).map(({ key, className }) => (
-                          <button
-                            key={key}
-                            type="button"
-                            title={
-                              key === 'red'
-                                ? 'Sem potencial / não vendeu'
-                                : key === 'yellow'
-                                  ? 'Tem potencial'
-                                  : 'Vendeu o sistema'
-                            }
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              setMark(markKey, mark === key ? null : key);
-                            }}
-                            className={`h-9 w-9 rounded-lg transition-all ${
-                              mark === key
-                                ? `${className} ring-2 ring-offset-2 ring-gray-900 scale-105`
-                                : `${className} opacity-40 hover:opacity-100`
-                            }`}
-                            aria-pressed={mark === key}
-                          />
-                        ))}
-                      </div>
-                      {mark && (
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.preventDefault();
-                            e.stopPropagation();
-                            setMark(markKey, null);
-                          }}
-                          className="text-[10px] font-black uppercase text-gray-500 hover:text-gray-800 underline"
-                        >
-                          Limpar
-                        </button>
-                      )}
-                    </div>
+                    <MarkColorButtons mark={mark} onMarkChange={(c) => setMark(markKey, c)} />
                   </td>
                 </tr>
               );

@@ -51,7 +51,7 @@ type PlacesResultsBodyProps = {
   filteredPlaces: Place[];
   maxFetchedRadius: number;
   marks: Record<string, PlaceMarkColor>;
-  setMark: (id: string, color: PlaceMarkColor) => void;
+  setMark: (id: string, color: PlaceMarkColor | null) => void;
   onOpenPlace: (id: string) => void;
 };
 
@@ -63,6 +63,8 @@ const PlacesResultsBody: React.FC<PlacesResultsBodyProps> = ({
   setMark,
   onOpenPlace,
 }) => {
+  const rowMarkKeys = useMemo(() => computeRowMarkKeys(filteredPlaces), [filteredPlaces]);
+
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-16 gap-4">
@@ -74,7 +76,31 @@ const PlacesResultsBody: React.FC<PlacesResultsBodyProps> = ({
   if (filteredPlaces.length > 0) {
     return (
       <>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+        <div className="md:hidden mb-2">
+          <p className="text-[11px] font-black uppercase tracking-wide text-gray-500 px-1 mb-3">
+            Deslize para o lado · marque o funil em cada card
+          </p>
+          <div className="flex gap-4 overflow-x-auto snap-x snap-mandatory pb-4 px-1 -mx-0.5 scrollbar-hide [scrollbar-width:none] [-ms-overflow-style:none]">
+            {filteredPlaces.map((place, index) => {
+              const markKey = rowMarkKeys[index] ?? `row:${index}`;
+              return (
+                <article
+                  key={place.place_id}
+                  className="snap-center shrink-0 w-[min(88vw,360px)] first:pl-0.5 last:pr-3"
+                >
+                  <PlaceCard
+                    place={place}
+                    onClick={() => onOpenPlace(place.place_id)}
+                    mark={marks[markKey]}
+                    onMarkChange={(c) => setMark(markKey, c)}
+                  />
+                </article>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="hidden md:grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
           {filteredPlaces.map((place) => (
             <PlaceCard key={place.place_id} place={place} onClick={() => onOpenPlace(place.place_id)} />
           ))}
