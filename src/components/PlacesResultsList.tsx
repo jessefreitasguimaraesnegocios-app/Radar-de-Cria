@@ -46,9 +46,12 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({
         <div>
           <h2 className="text-xl font-black text-gray-900 tracking-tight">Lista de resultados</h2>
           <p className="text-xs text-gray-500 font-medium max-w-3xl">
-            Contatos para abordagem: WhatsApp, Instagram, site, app, endereço e telefone. Use as cores como
-            funil: vermelho (descartado), amarelo (follow-up), verde (combinado / quente). As mesmas cores
-            aparecem no mapa. Salvo neste navegador.
+            Contatos: WhatsApp, Instagram, site, app, endereço e telefone. No mapa, resultados vêm{' '}
+            <strong className="text-red-600">vermelhos</strong> por padrão;{' '}
+            <strong className="text-amber-600">amarelo</strong> = tem potencial;{' '}
+            <strong className="text-emerald-600">verde</strong> = vendeu seu sistema;{' '}
+            <strong className="text-red-600">vermelho</strong> explícito = sem potencial ou não vendeu. Sua
+            localização é o pino <strong className="text-blue-600">azul</strong>. Salvo neste navegador.
           </p>
         </div>
       </div>
@@ -183,7 +186,13 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({
                           <button
                             key={key}
                             type="button"
-                            title={key === 'red' ? 'Vermelho' : key === 'yellow' ? 'Amarelo' : 'Verde'}
+                            title={
+                              key === 'red'
+                                ? 'Sem potencial / não vendeu'
+                                : key === 'yellow'
+                                  ? 'Tem potencial'
+                                  : 'Vendeu o sistema'
+                            }
                             onClick={(e) => {
                               e.preventDefault();
                               e.stopPropagation();

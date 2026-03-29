@@ -77,13 +77,15 @@ const Map: React.FC<MapProps> = ({
           .setLngLat([place.geometry.location.lng, place.geometry.location.lat])
           .setPopup(
             new mapboxgl.Popup().setHTML(
-              `<h3 style="margin:0 0 4px">${place.name}</h3>${
-                mark
-                  ? `<p style="margin:0;font-size:12px;color:#666">Marcado: ${
-                      mark === 'red' ? 'vermelho' : mark === 'yellow' ? 'amarelo' : 'verde'
-                    }</p>`
-                  : ''
-              }`
+              `<h3 style="margin:0 0 4px">${place.name}</h3><p style="margin:0;font-size:12px;color:#666">${
+                mark === 'yellow'
+                  ? 'Potencial (amarelo)'
+                  : mark === 'green'
+                    ? 'Vendeu sistema (verde)'
+                    : mark === 'red'
+                      ? 'Sem potencial / não vendeu (vermelho)'
+                      : 'Padrão: ainda não qualificado (vermelho)'
+              }</p>`
             )
           )
           .addTo(map.current!);

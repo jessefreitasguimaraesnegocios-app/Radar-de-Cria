@@ -51,11 +51,11 @@ export function computeRowMarkKeys(placesIn: { place_id?: string; name?: string;
   });
 }
 
+/** Sem marca = vermelho (padrão: não vendi / sem potencial). Amarelo = potencial. Verde = vendeu. */
 export function mapMarkerHex(mark: PlaceMarkColor | undefined): string {
-  if (mark === 'red') return '#EF4444';
   if (mark === 'yellow') return '#F59E0B';
   if (mark === 'green') return '#22C55E';
-  return '#2563EB';
+  return '#EF4444';
 }
 
-export const USER_LOCATION_MARKER_HEX = '#EAB308';
+export const USER_LOCATION_MARKER_HEX = '#2563EB';
