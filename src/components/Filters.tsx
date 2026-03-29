@@ -134,7 +134,10 @@ const Filters: React.FC<FiltersProps> = ({
               <span className="ml-2 font-bold text-gray-600">
                 {resultCount === 1 ? 'resultado' : 'resultados'}
               </span>
-              <span className="block text-xs font-medium text-gray-400 mt-0.5">
+              <span className="block text-xs font-medium text-gray-400 mt-0.5 md:hidden">
+                Total com os filtros — use a aba <strong>Lista</strong> no celular
+              </span>
+              <span className="hidden md:block text-xs font-medium text-gray-400 mt-0.5">
                 Total com os filtros atuais (mapa e tabela abaixo)
               </span>
             </p>

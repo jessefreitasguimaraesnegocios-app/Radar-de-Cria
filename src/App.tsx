@@ -1,12 +1,20 @@
 import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { AnimatePresence } from 'motion/react';
-import { MapPin, Navigation as NavigationIcon, Loader2, AlertCircle, Info, Target } from 'lucide-react';
+import {
+  MapPin,
+  Map as MapIcon,
+  List,
+  Navigation as NavigationIcon,
+  Loader2,
+  AlertCircle,
+  Info,
+  Target,
+} from 'lucide-react';
 import Map from './components/Map';
 import PlaceCard from './components/PlaceCard';
 import Filters from './components/Filters';
 import PlaceDetails from './components/PlaceDetails';
 import PlacesResultsList from './components/PlacesResultsList';
-import MobilePlacesCarousel from './components/MobilePlacesCarousel';
 import InstallAppCta from './components/InstallAppCta';
 import { Place, UserLocation } from './types';
 import { distanceMeters } from './lib/geo';
@@ -21,6 +29,7 @@ import {
   pruneExpiredEntries,
 } from './lib/placesSearchCache';
 import { usePlaceMarks } from './hooks/usePlaceMarks';
+import type { PlaceMarkColor } from './lib/placeMarks';
 
 async function enrichWithDetails(placesIn: Place[], limit = 15): Promise<Place[]> {
   const head = placesIn.slice(0, limit);
@@ -37,6 +46,68 @@ async function enrichWithDetails(placesIn: Place[], limit = 15): Promise<Place[]
   return [...detailedHead, ...placesIn.slice(limit)];
 }
 
+type PlacesResultsBodyProps = {
+  loading: boolean;
+  filteredPlaces: Place[];
+  maxFetchedRadius: number;
+  marks: Record<string, PlaceMarkColor>;
+  setMark: (id: string, color: PlaceMarkColor) => void;
+  onOpenPlace: (id: string) => void;
+};
+
+const PlacesResultsBody: React.FC<PlacesResultsBodyProps> = ({
+  loading,
+  filteredPlaces,
+  maxFetchedRadius,
+  marks,
+  setMark,
+  onOpenPlace,
+}) => {
+  if (loading) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-4">
+        <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
+        <p className="text-gray-500 font-black uppercase tracking-widest text-sm">Buscando estabelecimentos...</p>
+      </div>
+    );
+  }
+  if (filteredPlaces.length > 0) {
+    return (
+      <>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          {filteredPlaces.map((place) => (
+            <PlaceCard key={place.place_id} place={place} onClick={() => onOpenPlace(place.place_id)} />
+          ))}
+        </div>
+        <PlacesResultsList places={filteredPlaces} marks={marks} setMark={setMark} onOpenPlace={onOpenPlace} />
+      </>
+    );
+  }
+  if (maxFetchedRadius === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-16 gap-4 text-center px-2">
+        <div className="bg-gray-100 p-6 rounded-full">
+          <Info className="w-12 h-12 text-gray-400" />
+        </div>
+        <h3 className="text-xl font-black text-gray-900">Nenhuma busca ainda</h3>
+        <p className="text-gray-500 max-w-sm leading-relaxed text-sm">
+          Defina o mapa (cidade ou GPS) e depois busque por segmento, ou use o botão de cidade para buscar
+          estabelecimentos na região.
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="flex flex-col items-center justify-center py-16 gap-4 text-center px-2">
+      <div className="bg-gray-100 p-6 rounded-full">
+        <Info className="w-12 h-12 text-gray-400" />
+      </div>
+      <h3 className="text-xl font-black text-gray-900">Nenhum estabelecimento encontrado</h3>
+      <p className="text-gray-500 max-w-xs text-sm">Tente aumentar o raio de busca ou mudar os filtros aplicados.</p>
+    </div>
+  );
+};
+
 const App: React.FC = () => {
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [places, setPlaces] = useState<Place[]>([]);
@@ -49,6 +120,7 @@ const App: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState('all');
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [keyword, setKeyword] = useState('');
+  const [mobilePanel, setMobilePanel] = useState<'map' | 'lista'>('map');
   const { marks, setMark } = usePlaceMarks();
 
   useEffect(() => {
@@ -233,9 +305,12 @@ const App: React.FC = () => {
   };
 
   const scrollToResultsList = useCallback(() => {
-    document.getElementById('places-results-list')?.scrollIntoView({
-      behavior: 'smooth',
-      block: 'start',
+    setMobilePanel('lista');
+    requestAnimationFrame(() => {
+      document.getElementById('places-results-list')?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
     });
   }, []);
 
@@ -317,8 +392,8 @@ const App: React.FC = () => {
 
       <InstallAppCta />
 
-      <main className="max-w-7xl mx-auto px-4 py-8 md:px-8 flex flex-col">
-        <div className="order-1 mb-6 flex gap-3 rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-sm text-blue-950">
+      <main className="max-w-7xl mx-auto px-4 py-8 md:px-8">
+        <div className="mb-6 flex gap-3 rounded-2xl border border-blue-100 bg-blue-50/80 px-4 py-3 text-sm text-blue-950">
           <Target className="w-5 h-5 shrink-0 text-blue-600 mt-0.5" />
           <div>
             <p className="font-black text-blue-900 text-xs uppercase tracking-wide mb-1">Prospecção</p>
@@ -332,29 +407,8 @@ const App: React.FC = () => {
           </div>
         </div>
 
-        <div className="order-2 md:order-3 mb-8">
-          <Filters
-            radius={radius}
-            onRadiusChange={handleRadiusChange}
-            onCitySearch={handleCitySearch}
-            onKeywordSearch={handleKeywordSearch}
-            onFilterChange={setActiveFilter}
-            activeFilter={activeFilter}
-            resultCount={filteredPlaces.length}
-            loading={loading}
-            onScrollToList={scrollToResultsList}
-          />
-        </div>
-
-        {error && (
-          <div className="order-3 md:order-4 bg-red-50 border border-red-100 p-4 rounded-2xl flex items-center gap-3 text-red-700 mb-8">
-            <AlertCircle className="w-6 h-6" />
-            <p className="font-bold">{error}</p>
-          </div>
-        )}
-
-        {/* Map Section — no mobile fica depois da lista em carrossel */}
-        <div className="order-5 md:order-2 mb-8">
+        {/* Desktop: mapa acima dos filtros */}
+        <div className="hidden md:block mb-8">
           {userLocation ? (
             <Map
               userLocation={userLocation}
@@ -375,61 +429,106 @@ const App: React.FC = () => {
           )}
         </div>
 
-        {/* Lista: carrossel no mobile (antes do mapa); grid + tabela no md+ */}
-        <div id="places-results-list" className="order-4 md:order-5 relative scroll-mt-28">
-          {loading ? (
-            <div className="flex flex-col items-center justify-center py-20 gap-4">
-              <Loader2 className="w-12 h-12 text-blue-600 animate-spin" />
-              <p className="text-gray-500 font-black uppercase tracking-widest text-sm">Buscando estabelecimentos...</p>
+        {/* Filters */}
+        <Filters
+          radius={radius}
+          onRadiusChange={handleRadiusChange}
+          onCitySearch={handleCitySearch}
+          onKeywordSearch={handleKeywordSearch}
+          onFilterChange={setActiveFilter}
+          activeFilter={activeFilter}
+          resultCount={filteredPlaces.length}
+          loading={loading}
+          onScrollToList={scrollToResultsList}
+        />
+
+        {/* Error State */}
+        {error && (
+          <div className="bg-red-50 border border-red-100 p-4 rounded-2xl flex items-center gap-3 text-red-700 mb-8">
+            <AlertCircle className="w-6 h-6" />
+            <p className="font-bold">{error}</p>
+          </div>
+        )}
+
+        {/* Mobile: mapa e lista em “páginas” lado a lado (abas + deslize) */}
+        <div className="md:hidden mb-8">
+          <div className="flex rounded-2xl bg-gray-100/90 p-1.5 border border-gray-200 mb-4 shadow-inner">
+            <button
+              type="button"
+              onClick={() => setMobilePanel('map')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-black text-sm transition-all ${
+                mobilePanel === 'map'
+                  ? 'bg-white text-blue-700 shadow-md shadow-gray-200/80'
+                  : 'text-gray-500'
+              }`}
+            >
+              <MapIcon className="w-5 h-5 shrink-0" aria-hidden />
+              Mapa
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobilePanel('lista')}
+              className={`flex-1 flex items-center justify-center gap-2 py-3 rounded-xl font-black text-sm transition-all ${
+                mobilePanel === 'lista'
+                  ? 'bg-white text-blue-700 shadow-md shadow-gray-200/80'
+                  : 'text-gray-500'
+              }`}
+            >
+              <List className="w-5 h-5 shrink-0" aria-hidden />
+              Lista
+            </button>
+          </div>
+
+          <div className="overflow-hidden rounded-2xl border border-gray-200 bg-gray-50/50 shadow-sm">
+            <div
+              className={`flex w-[200%] transition-transform duration-300 ease-out will-change-transform ${
+                mobilePanel === 'map' ? 'translate-x-0' : '-translate-x-1/2'
+              }`}
+            >
+              <div className="w-1/2 shrink-0 min-w-[50%] p-2 box-border">
+                {userLocation ? (
+                  <Map
+                    userLocation={userLocation}
+                    places={filteredPlaces}
+                    rowMarkKeys={rowMarkKeys}
+                    marks={marks}
+                    onPlaceSelect={(place) => setSelectedPlaceId(place.place_id)}
+                    containerClassName="h-[min(46vh,380px)] min-h-[200px] max-h-[420px] shadow-md"
+                  />
+                ) : (
+                  <div className="w-full min-h-[200px] h-[min(46vh,380px)] rounded-xl border border-dashed border-gray-300 bg-gray-50 flex flex-col items-center justify-center gap-2 px-4 text-center">
+                    <MapPin className="w-9 h-9 text-gray-400" />
+                    <p className="text-gray-800 font-black text-sm">Mapa</p>
+                    <p className="text-gray-600 text-xs leading-relaxed">
+                      Busque cidade ou GPS; depois use a aba <strong>Lista</strong> para os resultados.
+                    </p>
+                  </div>
+                )}
+              </div>
+              <div className="w-1/2 shrink-0 min-w-[50%] max-h-[min(78dvh,640px)] overflow-y-auto overscroll-y-contain p-2 pb-6 box-border bg-white rounded-r-2xl">
+                <PlacesResultsBody
+                  loading={loading}
+                  filteredPlaces={filteredPlaces}
+                  maxFetchedRadius={maxFetchedRadius}
+                  marks={marks}
+                  setMark={setMark}
+                  onOpenPlace={(id) => setSelectedPlaceId(id)}
+                />
+              </div>
             </div>
-          ) : (
-            <>
-              {filteredPlaces.length > 0 ? (
-                <>
-                  <MobilePlacesCarousel
-                    places={filteredPlaces}
-                    marks={marks}
-                    setMark={setMark}
-                    onOpenPlace={(id) => setSelectedPlaceId(id)}
-                  />
-                  <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                    {filteredPlaces.map((place) => (
-                      <PlaceCard
-                        key={place.place_id}
-                        place={place}
-                        onClick={() => setSelectedPlaceId(place.place_id)}
-                      />
-                    ))}
-                  </div>
-                  <PlacesResultsList
-                    places={filteredPlaces}
-                    marks={marks}
-                    setMark={setMark}
-                    onOpenPlace={(id) => setSelectedPlaceId(id)}
-                  />
-                </>
-              ) : maxFetchedRadius === 0 ? (
-                <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-                  <div className="bg-gray-100 p-6 rounded-full">
-                    <Info className="w-12 h-12 text-gray-400" />
-                  </div>
-                  <h3 className="text-xl font-black text-gray-900">Nenhuma busca ainda</h3>
-                  <p className="text-gray-500 max-w-sm leading-relaxed">
-                    Defina o mapa (cidade ou GPS) e depois busque por segmento, ou use o botão de cidade para buscar
-                    estabelecimentos na região.
-                  </p>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
-                  <div className="bg-gray-100 p-6 rounded-full">
-                    <Info className="w-12 h-12 text-gray-400" />
-                  </div>
-                  <h3 className="text-xl font-black text-gray-900">Nenhum estabelecimento encontrado</h3>
-                  <p className="text-gray-500 max-w-xs">Tente aumentar o raio de busca ou mudar os filtros aplicados.</p>
-                </div>
-              )}
-            </>
-          )}
+          </div>
+        </div>
+
+        {/* Desktop: resultados abaixo */}
+        <div className="relative hidden md:block">
+          <PlacesResultsBody
+            loading={loading}
+            filteredPlaces={filteredPlaces}
+            maxFetchedRadius={maxFetchedRadius}
+            marks={marks}
+            setMark={setMark}
+            onOpenPlace={(id) => setSelectedPlaceId(id)}
+          />
         </div>
       </main>
 

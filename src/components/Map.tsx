@@ -1,6 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import { twMerge } from 'tailwind-merge';
 import { Place, UserLocation } from '../types';
 import {
   mapMarkerHex,
@@ -15,6 +16,8 @@ interface MapProps {
   rowMarkKeys: string[];
   marks: Record<string, PlaceMarkColor>;
   onPlaceSelect: (place: Place) => void;
+  /** Sobrescreve altura (ex.: mapa maior no painel mobile). */
+  containerClassName?: string;
 }
 
 const Map: React.FC<MapProps> = ({
@@ -23,6 +26,7 @@ const Map: React.FC<MapProps> = ({
   rowMarkKeys,
   marks,
   onPlaceSelect,
+  containerClassName,
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
@@ -96,7 +100,15 @@ const Map: React.FC<MapProps> = ({
     }
   }, [places, userLocation, marks, rowMarkKeys]);
 
-  return <div ref={mapContainer} className="w-full h-64 md:h-96 rounded-xl overflow-hidden shadow-lg" />;
+  return (
+    <div
+      ref={mapContainer}
+      className={twMerge(
+        'w-full h-64 md:h-96 rounded-xl overflow-hidden shadow-lg',
+        containerClassName
+      )}
+    />
+  );
 };
 
 export default Map;
