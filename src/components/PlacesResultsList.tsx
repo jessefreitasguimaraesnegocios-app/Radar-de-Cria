@@ -9,6 +9,7 @@ import {
   MapPin,
   Phone,
   Navigation,
+  RotateCcw,
 } from 'lucide-react';
 import { Place, UserLocation } from '../types';
 import { distanceMeters } from '../lib/geo';
@@ -55,7 +56,13 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({
   setMark,
 }) => {
   const [sortByDistance, setSortByDistance] = React.useState(false);
-  const [sortPriority, setSortPriority] = React.useState<ChannelKey[]>(() => [...DEFAULT_PRIORITY]);
+  /** Ordem em que os ícones foram tocados: 1º clique = 1º critério, etc. */
+  const [pickOrder, setPickOrder] = React.useState<ChannelKey[]>([]);
+
+  const effectiveChannelPriority = React.useMemo(() => {
+    const rest = DEFAULT_PRIORITY.filter((k) => !pickOrder.includes(k));
+    return [...pickOrder, ...rest];
+  }, [pickOrder]);
 
   const sortedPlaces = React.useMemo(() => {
     const list = [...places];
@@ -65,7 +72,7 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({
       return distanceMeters(userLocation, loc);
     };
     const channelCmp = (a: Place, b: Place) => {
-      for (const key of sortPriority) {
+      for (const key of effectiveChannelPriority) {
         const va = placeHasChannel(a, key) ? 1 : 0;
         const vb = placeHasChannel(b, key) ? 1 : 0;
         if (vb !== va) return vb - va;
@@ -83,7 +90,7 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({
       return dist(a) - dist(b);
     });
     return list;
-  }, [places, sortPriority, sortByDistance, userLocation]);
+  }, [places, effectiveChannelPriority, sortByDistance, userLocation]);
 
   const rowMarkKeys = React.useMemo(() => computeRowMarkKeys(sortedPlaces), [sortedPlaces]);
   const markPinTotals = React.useMemo(
@@ -91,15 +98,14 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({
     [sortedPlaces, rowMarkKeys, marks]
   );
 
-  const bumpChannelPriority = (k: ChannelKey) => {
-    setSortPriority((prev) => {
+  const onChannelIconClick = (k: ChannelKey) => {
+    setPickOrder((prev) => {
       const i = prev.indexOf(k);
-      if (i < 0) return prev;
-      if (i === 0) return prev;
-      const next = [...prev];
-      next.splice(i, 1);
-      next.unshift(k);
-      return next;
+      if (i >= 0) {
+        return prev.slice(0, i);
+      }
+      if (prev.length >= DEFAULT_PRIORITY.length) return prev;
+      return [...prev, k];
     });
   };
 
@@ -129,8 +135,9 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({
         </div>
 
         <div className="w-full md:w-auto flex flex-col items-center md:items-end gap-2 shrink-0">
-          <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 text-center md:text-right w-full md:max-w-[220px] leading-snug">
-            Ordem da lista: esquerda → direita. Toque no ícone para colocá-lo em 1º (quem tem, primeiro).
+          <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 text-center md:text-right w-full md:max-w-[280px] leading-snug">
+            Monte a ordem: 1º toque = 1º critério (quem tem, primeiro). Só dá para escolher os que faltam; toque de
+            novo num já escolhido para voltar e refazer a partir dele.
           </p>
           <div
             className="flex flex-wrap items-center justify-center gap-2 md:justify-end"
@@ -162,32 +169,59 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({
                 </span>
               ) : null}
             </button>
+            {pickOrder.length > 0 ? (
+              <button
+                type="button"
+                title="Limpar ordem dos canais"
+                aria-label="Limpar ordem dos canais"
+                onClick={() => setPickOrder([])}
+                className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border-2 border-gray-200 bg-white text-gray-500 shadow-sm transition-all hover:border-amber-300 hover:bg-amber-50 hover:text-amber-800 active:scale-95"
+              >
+                <RotateCcw className="w-5 h-5" aria-hidden />
+              </button>
+            ) : null}
             <span
               className="hidden md:inline-block w-px h-8 self-center bg-gradient-to-b from-transparent via-gray-200 to-transparent"
               aria-hidden
             />
             <span className="md:hidden w-full max-w-[200px] h-px bg-gray-200" aria-hidden />
-            {sortPriority.map((key, index) => {
+            {DEFAULT_PRIORITY.map((key) => {
               const { Icon, colorClass, label } = CHANNEL_META[key];
-              const rank = sortByDistance && userLocation ? index + 2 : index + 1;
-              const isPrimaryChannel = !sortByDistance || !userLocation ? index === 0 : false;
+              const pickIndex = pickOrder.indexOf(key);
+              const picked = pickIndex >= 0;
+              const channelRank = pickIndex + 1;
+              const canPick = !picked && pickOrder.length < DEFAULT_PRIORITY.length;
               return (
                 <button
                   key={key}
                   type="button"
-                  title={`${label}: toque para priorizar em 1º entre os canais (critério ${rank} no total)`}
-                  aria-label={`Prioridade ${rank}: ${label}`}
-                  onClick={() => bumpChannelPriority(key)}
-                  className={`relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border-2 bg-white shadow-sm transition-all active:scale-95 ${
-                    isPrimaryChannel
-                      ? 'border-gray-400 ring-2 ring-gray-200/90'
-                      : 'border-gray-200 hover:border-gray-300'
-                  } ${colorClass}`}
+                  title={
+                    picked
+                      ? `${label} é o ${channelRank}º critério — toque para desfazer a partir daqui`
+                      : canPick
+                        ? `${label}: será o ${pickOrder.length + 1}º critério`
+                        : `${label}: ordem já completa (use reset ou toque num escolhido para voltar)`
+                  }
+                  aria-label={
+                    picked ? `${label}, posição ${channelRank} na ordem` : `Adicionar ${label} como próximo critério`
+                  }
+                  aria-pressed={picked}
+                  disabled={!picked && !canPick}
+                  onClick={() => onChannelIconClick(key)}
+                  className={`relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border-2 shadow-sm transition-all active:scale-95 ${
+                    picked
+                      ? `border-gray-700 bg-gray-50 ring-2 ring-gray-300/80 ${colorClass}`
+                      : canPick
+                        ? `border-gray-200 bg-white hover:border-gray-400 ${colorClass}`
+                        : 'cursor-not-allowed border-gray-100 bg-gray-50/80 text-gray-300'
+                  }`}
                 >
-                  <Icon className="w-5 h-5" aria-hidden />
-                  <span className="absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-gray-800 px-1 text-[9px] font-black text-white shadow">
-                    {rank}
-                  </span>
+                  <Icon className={`w-5 h-5 ${!picked && !canPick ? 'opacity-35' : ''}`} aria-hidden />
+                  {picked ? (
+                    <span className="absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-gray-800 px-1 text-[9px] font-black text-white shadow">
+                      {channelRank}
+                    </span>
+                  ) : null}
                 </button>
               );
             })}
