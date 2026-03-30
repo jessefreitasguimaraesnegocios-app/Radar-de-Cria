@@ -20,11 +20,16 @@ export type { PlaceMarkColor };
 
 type ChannelKey = 'site' | 'whatsapp' | 'instagram' | 'app';
 
-const CHANNEL_LABEL: Record<ChannelKey, string> = {
-  site: 'Site: desligado = oculta quem tem site',
-  whatsapp: 'WhatsApp: desligado = oculta quem tem WhatsApp',
-  instagram: 'Instagram: desligado = oculta quem tem Instagram',
-  app: 'App: desligado = oculta quem tem app próprio',
+const DEFAULT_PRIORITY: ChannelKey[] = ['site', 'whatsapp', 'instagram', 'app'];
+
+const CHANNEL_META: Record<
+  ChannelKey,
+  { label: string; Icon: typeof Globe; colorClass: string }
+> = {
+  site: { label: 'Site', Icon: Globe, colorClass: 'text-indigo-600' },
+  whatsapp: { label: 'WhatsApp', Icon: MessageCircle, colorClass: 'text-emerald-600' },
+  instagram: { label: 'Instagram', Icon: Instagram, colorClass: 'text-pink-600' },
+  app: { label: 'App', Icon: Smartphone, colorClass: 'text-blue-600' },
 };
 
 function placeHasChannel(p: Place, key: ChannelKey): boolean {
@@ -50,40 +55,19 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({
   setMark,
 }) => {
   const [sortByDistance, setSortByDistance] = React.useState(false);
-  const [channelOn, setChannelOn] = React.useState<Record<ChannelKey, boolean>>({
-    site: true,
-    whatsapp: true,
-    instagram: true,
-    app: true,
-  });
-
-  const visiblePlaces = React.useMemo(() => {
-    const keys: ChannelKey[] = ['site', 'whatsapp', 'instagram', 'app'];
-    return places.filter((p) =>
-      keys.every((k) => channelOn[k] || !placeHasChannel(p, k))
-    );
-  }, [places, channelOn]);
+  const [sortPriority, setSortPriority] = React.useState<ChannelKey[]>(() => [...DEFAULT_PRIORITY]);
 
   const sortedPlaces = React.useMemo(() => {
-    const list = [...visiblePlaces];
+    const list = [...places];
     const dist = (p: Place) => {
       const loc = p.geometry?.location;
       if (!userLocation || !loc) return Number.POSITIVE_INFINITY;
       return distanceMeters(userLocation, loc);
     };
     const channelCmp = (a: Place, b: Place) => {
-      const bits = (p: Place) =>
-        [
-          Boolean(p.website),
-          Boolean(p.whatsapp_url),
-          Boolean(p.instagram_url),
-          p.hasApp === true,
-        ] as const;
-      const ba = bits(a);
-      const bb = bits(b);
-      for (let i = 0; i < ba.length; i++) {
-        const va = ba[i] ? 1 : 0;
-        const vb = bb[i] ? 1 : 0;
+      for (const key of sortPriority) {
+        const va = placeHasChannel(a, key) ? 1 : 0;
+        const vb = placeHasChannel(b, key) ? 1 : 0;
         if (vb !== va) return vb - va;
       }
       return 0;
@@ -99,7 +83,7 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({
       return dist(a) - dist(b);
     });
     return list;
-  }, [visiblePlaces, sortByDistance, userLocation]);
+  }, [places, sortPriority, sortByDistance, userLocation]);
 
   const rowMarkKeys = React.useMemo(() => computeRowMarkKeys(sortedPlaces), [sortedPlaces]);
   const markPinTotals = React.useMemo(
@@ -107,8 +91,16 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({
     [sortedPlaces, rowMarkKeys, marks]
   );
 
-  const toggleChannel = (k: ChannelKey) => {
-    setChannelOn((prev) => ({ ...prev, [k]: !prev[k] }));
+  const bumpChannelPriority = (k: ChannelKey) => {
+    setSortPriority((prev) => {
+      const i = prev.indexOf(k);
+      if (i < 0) return prev;
+      if (i === 0) return prev;
+      const next = [...prev];
+      next.splice(i, 1);
+      next.unshift(k);
+      return next;
+    });
   };
 
   if (places.length === 0) return null;
@@ -118,8 +110,8 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({
       id="places-results-list"
       className="mt-14 mb-8 scroll-mt-28"
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between mb-4">
+        <div className="flex items-center gap-2 md:max-w-[min(100%,42rem)]">
           <div className="bg-emerald-600 p-2 rounded-xl text-white shrink-0">
             <ListChecks className="w-5 h-5" />
           </div>
@@ -136,74 +128,74 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({
           </div>
         </div>
 
-        <div
-          className="flex flex-wrap items-center gap-2 sm:justify-end"
-          role="toolbar"
-          aria-label="Ordenar e filtrar a tabela"
-        >
-          <button
-            type="button"
-            title={
-              userLocation
-                ? sortByDistance
-                  ? 'Ordenação: distância (ligado)'
-                  : 'Ordenação: site → WhatsApp → Instagram → app; depois distância'
-                : 'Ative localização no mapa para ordenar por distância'
-            }
-            aria-pressed={sortByDistance}
-            disabled={!userLocation}
-            onClick={() => setSortByDistance((v) => !v)}
-            className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border-2 transition-all ${
-              sortByDistance && userLocation
-                ? 'border-blue-600 bg-blue-50 text-blue-700'
-                : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-600'
-            } disabled:cursor-not-allowed disabled:opacity-40`}
+        <div className="w-full md:w-auto flex flex-col items-center md:items-end gap-2 shrink-0">
+          <p className="text-[10px] font-black uppercase tracking-wider text-gray-400 text-center md:text-right w-full md:max-w-[220px] leading-snug">
+            Ordem da lista: esquerda → direita. Toque no ícone para colocá-lo em 1º (quem tem, primeiro).
+          </p>
+          <div
+            className="flex flex-wrap items-center justify-center gap-2 md:justify-end"
+            role="toolbar"
+            aria-label="Ordem dos critérios na lista"
           >
-            <Navigation className="w-5 h-5" aria-hidden />
-          </button>
-          <span className="hidden sm:inline w-px h-6 bg-gray-200 mx-0.5" aria-hidden />
-          {(
-            [
-              ['site', Globe, 'text-indigo-600'] as const,
-              ['whatsapp', MessageCircle, 'text-emerald-600'] as const,
-              ['instagram', Instagram, 'text-pink-600'] as const,
-              ['app', Smartphone, 'text-blue-600'] as const,
-            ] as const
-          ).map(([key, Icon, colorClass]) => {
-            const on = channelOn[key];
-            return (
-              <button
-                key={key}
-                type="button"
-                title={CHANNEL_LABEL[key]}
-                aria-pressed={on}
-                onClick={() => toggleChannel(key)}
-                className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border-2 transition-all ${
-                  on
-                    ? `border-gray-300 bg-white ${colorClass}`
-                    : 'border-gray-200 bg-gray-100 text-gray-400 opacity-50'
-                }`}
-              >
-                <Icon className="w-5 h-5" aria-hidden />
-              </button>
-            );
-          })}
+            <button
+              type="button"
+              title={
+                userLocation
+                  ? sortByDistance
+                    ? '1º: distância (mais perto). Toque para ordenar só por canais.'
+                    : 'Toque para priorizar distância em 1º lugar'
+                  : 'Ative localização no mapa para ordenar por distância'
+              }
+              aria-pressed={sortByDistance}
+              disabled={!userLocation}
+              onClick={() => setSortByDistance((v) => !v)}
+              className={`relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border-2 shadow-sm transition-all active:scale-95 ${
+                sortByDistance && userLocation
+                  ? 'border-blue-500 bg-blue-50 text-blue-700 ring-2 ring-blue-200/80'
+                  : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-600'
+              } disabled:cursor-not-allowed disabled:opacity-40`}
+            >
+              <Navigation className="w-5 h-5" aria-hidden />
+              {sortByDistance && userLocation ? (
+                <span className="absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-blue-600 px-1 text-[9px] font-black text-white shadow">
+                  1
+                </span>
+              ) : null}
+            </button>
+            <span
+              className="hidden md:inline-block w-px h-8 self-center bg-gradient-to-b from-transparent via-gray-200 to-transparent"
+              aria-hidden
+            />
+            <span className="md:hidden w-full max-w-[200px] h-px bg-gray-200" aria-hidden />
+            {sortPriority.map((key, index) => {
+              const { Icon, colorClass, label } = CHANNEL_META[key];
+              const rank = sortByDistance && userLocation ? index + 2 : index + 1;
+              const isPrimaryChannel = !sortByDistance || !userLocation ? index === 0 : false;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  title={`${label}: toque para priorizar em 1º entre os canais (critério ${rank} no total)`}
+                  aria-label={`Prioridade ${rank}: ${label}`}
+                  onClick={() => bumpChannelPriority(key)}
+                  className={`relative inline-flex h-11 w-11 items-center justify-center rounded-2xl border-2 bg-white shadow-sm transition-all active:scale-95 ${
+                    isPrimaryChannel
+                      ? 'border-gray-400 ring-2 ring-gray-200/90'
+                      : 'border-gray-200 hover:border-gray-300'
+                  } ${colorClass}`}
+                >
+                  <Icon className="w-5 h-5" aria-hidden />
+                  <span className="absolute -bottom-1 -right-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-gray-800 px-1 text-[9px] font-black text-white shadow">
+                    {rank}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
-      {visiblePlaces.length < places.length && (
-        <p className="text-[11px] font-bold text-gray-500 mb-2">
-          Mostrando {visiblePlaces.length} de {places.length} na tabela (ícones desligados ocultam quem tem aquele canal).
-        </p>
-      )}
-
       <MarkTotalsBar totals={markPinTotals} className="mb-4" />
-
-      {sortedPlaces.length === 0 && (
-        <p className="text-sm font-bold text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 mb-4">
-          Nenhuma linha com os ícones atuais: ligue de novo os canais que quiser incluir na tabela.
-        </p>
-      )}
 
       <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
         <table className="min-w-[960px] w-full text-left text-sm">
