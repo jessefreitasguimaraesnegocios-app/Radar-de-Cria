@@ -20,6 +20,8 @@ type StoreV1 = {
   entries: Record<string, CacheEntry>;
 };
 
+let inMemoryStore: StoreV1 | null = null;
+
 function roundCoord(n: number): string {
   return n.toFixed(4);
 }
@@ -37,20 +39,28 @@ export function mergePlacesById(apiPlaces: Place[], cachedPlaces: Place[]): Plac
 }
 
 function loadStore(): StoreV1 {
+  if (inMemoryStore) return inMemoryStore;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { v: 1, entries: {} };
+    if (!raw) {
+      inMemoryStore = { v: 1, entries: {} };
+      return inMemoryStore;
+    }
     const parsed = JSON.parse(raw) as StoreV1;
     if (parsed?.v !== 1 || typeof parsed.entries !== 'object' || parsed.entries == null) {
-      return { v: 1, entries: {} };
+      inMemoryStore = { v: 1, entries: {} };
+      return inMemoryStore;
     }
-    return parsed;
+    inMemoryStore = parsed;
+    return inMemoryStore;
   } catch {
-    return { v: 1, entries: {} };
+    inMemoryStore = { v: 1, entries: {} };
+    return inMemoryStore;
   }
 }
 
 function saveStore(store: StoreV1): void {
+  inMemoryStore = store;
   try {
     let s = JSON.stringify(store);
     if (s.length > 4_500_000) {
@@ -104,14 +114,19 @@ export function readEntry(key: string): CacheEntry | null {
 export function writeEntry(key: string, places: Place[], maxFetchedRadius: number): void {
   const store = loadStore();
   const now = Date.now();
+  const prev = store.entries[key];
   store.entries[key] = {
     savedAt: now,
     places,
-    maxFetchedRadius,
+    maxFetchedRadius: Math.max(prev?.maxFetchedRadius ?? 0, maxFetchedRadius),
   };
   const keys = Object.keys(store.entries);
   if (keys.length > MAX_ENTRIES) {
     trimOldest(store, MAX_ENTRIES);
   }
   saveStore(store);
+}
+
+export function canServeRadiusFromCache(entry: CacheEntry, requestedRadius: number): boolean {
+  return requestedRadius <= entry.maxFetchedRadius;
 }

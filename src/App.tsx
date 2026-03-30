@@ -22,9 +22,8 @@ import { computeRowMarkKeys, computeMarkPinTotals } from './lib/placeMarks';
 import { MarkTotalsBar } from './components/MarkTotalsBar';
 import {
   buildSearchKey,
-  FRESH_MS,
   MAX_RETENTION_MS,
-  mergePlacesById,
+  canServeRadiusFromCache,
   readEntry,
   writeEntry,
   pruneExpiredEntries,
@@ -181,38 +180,39 @@ const App: React.FC = () => {
       setPlaces(cached.places);
       setMaxFetchedRadius(cached.maxFetchedRadius);
       setError(null);
-
-      if (now - cached.savedAt < FRESH_MS) {
-        setLoading(false);
+      setLoading(false);
+      if (canServeRadiusFromCache(cached, rad)) {
         return;
       }
-
-      setLoading(false);
-      const fetchR = Math.max(rad, cached.maxFetchedRadius);
-      void (async () => {
-        try {
-          const response = await fetch(
-            `/api/places?lat=${lat}&lng=${lng}&radius=${fetchR}&type=establishment${kw ? `&keyword=${encodeURIComponent(kw)}` : ''}`
-          );
-          const data = await response.json();
-          if (opGen !== placesOpGen.current) return;
-          if (!Array.isArray(data)) {
-            if (data && typeof data === 'object' && 'error' in data && data.error) {
-              setError(String(data.error));
-            }
-            return;
+      setLoading(true);
+      try {
+        const response = await fetch(
+          `/api/places?lat=${lat}&lng=${lng}&radius=${rad}&type=establishment${kw ? `&keyword=${encodeURIComponent(kw)}` : ''}`
+        );
+        const data = await response.json();
+        if (opGen !== placesOpGen.current) return;
+        if (!Array.isArray(data)) {
+          if (data && typeof data === 'object' && 'error' in data && data.error) {
+            setError(String(data.error));
           }
-          const mergedRaw = mergePlacesById(data as Place[], cached.places);
-          const detailedPlaces = await enrichWithDetails(mergedRaw, 15);
-          if (opGen !== placesOpGen.current) return;
-          setPlaces(detailedPlaces);
-          setMaxFetchedRadius(fetchR);
-          setError(null);
-          writeEntry(cacheKey, detailedPlaces, fetchR);
-        } catch (err) {
-          console.error('Revalidate places:', err);
+          return;
         }
-      })();
+        const prevIds = new Set(cached.places.map((p) => p.place_id));
+        const newRaw = (data as Place[]).filter((p) => !prevIds.has(p.place_id));
+        const enrichedNew = newRaw.length > 0 ? await enrichWithDetails(newRaw, 15) : [];
+        if (opGen !== placesOpGen.current) return;
+        const merged = [...cached.places, ...enrichedNew];
+        setPlaces(merged);
+        setMaxFetchedRadius(rad);
+        setError(null);
+        writeEntry(cacheKey, merged, rad);
+      } catch (err) {
+        console.error('Error expanding places from cache:', err);
+      } finally {
+        if (opGen === placesOpGen.current) {
+          setLoading(false);
+        }
+      }
       return;
     }
 
@@ -254,7 +254,12 @@ const App: React.FC = () => {
     }
   }, [keyword]);
 
-  const expandPlacesRadius = useCallback(async (lat: number, lng: number, rad: number, searchKeyword?: string) => {
+  const expandPlacesRadius = useCallback(async (
+    lat: number,
+    lng: number,
+    rad: number,
+    searchKeyword?: string
+  ) => {
     const opGen = ++placesOpGen.current;
     setLoading(true);
     try {
