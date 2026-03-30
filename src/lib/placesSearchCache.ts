@@ -1,10 +1,10 @@
 import type { Place } from '../types';
 
-/** Sem requisição se o cache tiver menos idade (alinha ao servidor ~1h). */
-export const FRESH_MS = 60 * 60 * 1000;
-
 /** Remove entradas mais velhas que isso. */
-export const MAX_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+export const MAX_RETENTION_MS = 24 * 60 * 60 * 1000;
+
+/** Com cache servido, após esse tempo dispara revalidação silenciosa. */
+export const REVALIDATE_AFTER_MS = 15 * 60 * 1000;
 
 const STORAGE_KEY = 'radar_places_swr_v1';
 const MAX_ENTRIES = 20;
@@ -129,4 +129,8 @@ export function writeEntry(key: string, places: Place[], maxFetchedRadius: numbe
 
 export function canServeRadiusFromCache(entry: CacheEntry, requestedRadius: number): boolean {
   return requestedRadius <= entry.maxFetchedRadius;
+}
+
+export function shouldRevalidateEntry(entry: CacheEntry, now = Date.now()): boolean {
+  return now - entry.savedAt >= REVALIDATE_AFTER_MS;
 }

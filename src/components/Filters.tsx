@@ -7,6 +7,7 @@ interface FiltersProps {
   /** Geocodifica o texto do campo “Cidade” e centraliza o mapa (Enter ou botão). */
   onCitySearch: (query: string) => void;
   onKeywordSearch: (keyword: string) => void;
+  onRefreshResults: () => void;
   onFilterChange: (filter: string) => void;
   activeFilter: string;
   /** Total após filtros (mapa + lista). */
@@ -22,6 +23,7 @@ const Filters: React.FC<FiltersProps> = ({
   onFilterChange,
   activeFilter,
   onKeywordSearch,
+  onRefreshResults,
   resultCount,
   loading,
   onScrollToList,
@@ -144,14 +146,23 @@ const Filters: React.FC<FiltersProps> = ({
           )}
         </div>
         {!loading && resultCount > 0 && (
-          <button
-            type="button"
-            onClick={onScrollToList}
-            className="inline-flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-black text-sm hover:bg-emerald-700 transition-all active:scale-95 shadow-md shadow-emerald-200 shrink-0"
-          >
-            <List className="w-4 h-4" />
-            Ir para a lista
-          </button>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={onRefreshResults}
+              className="inline-flex items-center gap-2 bg-blue-600 text-white px-4 py-2.5 rounded-xl font-black text-sm hover:bg-blue-700 transition-all active:scale-95 shadow-md shadow-blue-200"
+            >
+              Atualizar resultados
+            </button>
+            <button
+              type="button"
+              onClick={onScrollToList}
+              className="inline-flex items-center gap-2 bg-emerald-600 text-white px-4 py-2.5 rounded-xl font-black text-sm hover:bg-emerald-700 transition-all active:scale-95 shadow-md shadow-emerald-200"
+            >
+              <List className="w-4 h-4" />
+              Ir para a lista
+            </button>
+          </div>
         )}
       </div>
     </div>

@@ -24,6 +24,7 @@ import {
   buildSearchKey,
   MAX_RETENTION_MS,
   canServeRadiusFromCache,
+  shouldRevalidateEntry,
   readEntry,
   writeEntry,
   pruneExpiredEntries,
@@ -168,20 +169,51 @@ const App: React.FC = () => {
     pruneExpiredEntries();
   }, []);
 
-  const loadPlacesFresh = useCallback(async (lat: number, lng: number, rad: number, searchKeyword?: string) => {
+  const loadPlacesFresh = useCallback(async (
+    lat: number,
+    lng: number,
+    rad: number,
+    searchKeyword?: string,
+    options?: { forceRefresh?: boolean }
+  ) => {
     const opGen = ++placesOpGen.current;
     const kw = searchKeyword !== undefined ? searchKeyword : keyword;
     const cacheKey = buildSearchKey(lat, lng, kw);
     const now = Date.now();
     const cached = readEntry(cacheKey);
+    const forceRefresh = options?.forceRefresh === true;
 
-    if (cached && now - cached.savedAt < MAX_RETENTION_MS) {
+    if (!forceRefresh && cached && now - cached.savedAt < MAX_RETENTION_MS) {
       if (opGen !== placesOpGen.current) return;
       setPlaces(cached.places);
       setMaxFetchedRadius(cached.maxFetchedRadius);
       setError(null);
       setLoading(false);
       if (canServeRadiusFromCache(cached, rad)) {
+        if (!shouldRevalidateEntry(cached, now)) {
+          return;
+        }
+        const fetchR = Math.max(rad, cached.maxFetchedRadius);
+        void (async () => {
+          try {
+            const response = await fetch(
+              `/api/places?lat=${lat}&lng=${lng}&radius=${fetchR}&type=establishment${kw ? `&keyword=${encodeURIComponent(kw)}` : ''}`
+            );
+            const data = await response.json();
+            if (opGen !== placesOpGen.current) return;
+            if (!Array.isArray(data)) return;
+            const prevIds = new Set(cached.places.map((p) => p.place_id));
+            const newRaw = (data as Place[]).filter((p) => !prevIds.has(p.place_id));
+            const enrichedNew = newRaw.length > 0 ? await enrichWithDetails(newRaw, 15) : [];
+            if (opGen !== placesOpGen.current) return;
+            const merged = [...cached.places, ...enrichedNew];
+            setPlaces(merged);
+            setMaxFetchedRadius(fetchR);
+            writeEntry(cacheKey, merged, fetchR);
+          } catch (err) {
+            console.error('Error revalidating cached places:', err);
+          }
+        })();
         return;
       }
       setLoading(true);
@@ -220,8 +252,9 @@ const App: React.FC = () => {
     setLoading(true);
     setMaxFetchedRadius(0);
     try {
+      const fetchRadius = forceRefresh && cached ? Math.max(rad, cached.maxFetchedRadius) : rad;
       const response = await fetch(
-        `/api/places?lat=${lat}&lng=${lng}&radius=${rad}&type=establishment${kw ? `&keyword=${encodeURIComponent(kw)}` : ''}`
+        `/api/places?lat=${lat}&lng=${lng}&radius=${fetchRadius}&type=establishment${kw ? `&keyword=${encodeURIComponent(kw)}` : ''}`
       );
       const data = await response.json();
 
@@ -239,9 +272,9 @@ const App: React.FC = () => {
       const detailedPlaces = await enrichWithDetails(data, 15);
       if (opGen !== placesOpGen.current) return;
       setPlaces(detailedPlaces);
-      setMaxFetchedRadius(rad);
+      setMaxFetchedRadius(fetchRadius);
       setError(null);
-      writeEntry(cacheKey, detailedPlaces, rad);
+      writeEntry(cacheKey, detailedPlaces, fetchRadius);
     } catch (err) {
       console.error('Error fetching places:', err);
       if (opGen === placesOpGen.current) {
@@ -359,6 +392,14 @@ const App: React.FC = () => {
     };
     requestAnimationFrame(() => requestAnimationFrame(runScroll));
   }, []);
+
+  const handleRefreshResults = useCallback(() => {
+    if (!userLocation) {
+      setError('Defina um ponto no mapa: busque uma cidade ou use “Localização atual” no topo.');
+      return;
+    }
+    void loadPlacesFresh(userLocation.lat, userLocation.lng, radius, keyword, { forceRefresh: true });
+  }, [keyword, loadPlacesFresh, radius, userLocation]);
 
   const handleCitySearch = async (raw: string) => {
     const q = raw.trim();
@@ -488,6 +529,7 @@ const App: React.FC = () => {
           onRadiusChange={handleRadiusChange}
           onCitySearch={handleCitySearch}
           onKeywordSearch={handleKeywordSearch}
+          onRefreshResults={handleRefreshResults}
           onFilterChange={setActiveFilter}
           activeFilter={activeFilter}
           resultCount={filteredPlaces.length}
