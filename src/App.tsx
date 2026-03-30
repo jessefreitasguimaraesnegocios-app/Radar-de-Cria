@@ -50,6 +50,7 @@ async function enrichWithDetails(placesIn: Place[], limit = 15): Promise<Place[]
 type PlacesResultsBodyProps = {
   loading: boolean;
   filteredPlaces: Place[];
+  userLocation: UserLocation | null;
   maxFetchedRadius: number;
   marks: Record<string, PlaceMarkColor>;
   setMark: (id: string, color: PlaceMarkColor | null) => void;
@@ -60,6 +61,7 @@ type PlacesResultsBodyProps = {
 const PlacesResultsBody: React.FC<PlacesResultsBodyProps> = ({
   loading,
   filteredPlaces,
+  userLocation,
   maxFetchedRadius,
   marks,
   setMark,
@@ -109,7 +111,13 @@ const PlacesResultsBody: React.FC<PlacesResultsBodyProps> = ({
             <PlaceCard key={place.place_id} place={place} onClick={() => onOpenPlace(place.place_id)} />
           ))}
         </div>
-        <PlacesResultsList places={filteredPlaces} marks={marks} setMark={setMark} onOpenPlace={onOpenPlace} />
+        <PlacesResultsList
+          places={filteredPlaces}
+          userLocation={userLocation}
+          marks={marks}
+          setMark={setMark}
+          onOpenPlace={onOpenPlace}
+        />
       </>
     );
   }
@@ -558,6 +566,7 @@ const App: React.FC = () => {
                 <PlacesResultsBody
                   loading={loading}
                   filteredPlaces={filteredPlaces}
+                  userLocation={userLocation}
                   maxFetchedRadius={maxFetchedRadius}
                   marks={marks}
                   setMark={setMark}
@@ -574,6 +583,7 @@ const App: React.FC = () => {
           <PlacesResultsBody
             loading={loading}
             filteredPlaces={filteredPlaces}
+            userLocation={userLocation}
             maxFetchedRadius={maxFetchedRadius}
             marks={marks}
             setMark={setMark}

@@ -8,16 +8,35 @@ import {
   Globe,
   MapPin,
   Phone,
+  Navigation,
 } from 'lucide-react';
-import { Place } from '../types';
+import { Place, UserLocation } from '../types';
+import { distanceMeters } from '../lib/geo';
 import { computeRowMarkKeys, computeMarkPinTotals, type PlaceMarkColor } from '../lib/placeMarks';
 import { MarkColorButtons } from './MarkColorButtons';
 import { MarkTotalsBar } from './MarkTotalsBar';
 
 export type { PlaceMarkColor };
 
+type ChannelKey = 'site' | 'whatsapp' | 'instagram' | 'app';
+
+const CHANNEL_LABEL: Record<ChannelKey, string> = {
+  site: 'Site: desligado = oculta quem tem site',
+  whatsapp: 'WhatsApp: desligado = oculta quem tem WhatsApp',
+  instagram: 'Instagram: desligado = oculta quem tem Instagram',
+  app: 'App: desligado = oculta quem tem app próprio',
+};
+
+function placeHasChannel(p: Place, key: ChannelKey): boolean {
+  if (key === 'site') return Boolean(p.website);
+  if (key === 'whatsapp') return Boolean(p.whatsapp_url);
+  if (key === 'instagram') return Boolean(p.instagram_url);
+  return p.hasApp === true;
+}
+
 interface PlacesResultsListProps {
   places: Place[];
+  userLocation: UserLocation | null;
   onOpenPlace: (placeId: string) => void;
   marks: Record<string, PlaceMarkColor>;
   setMark: (markKey: string, color: PlaceMarkColor | null) => void;
@@ -25,15 +44,72 @@ interface PlacesResultsListProps {
 
 const PlacesResultsList: React.FC<PlacesResultsListProps> = ({
   places,
+  userLocation,
   onOpenPlace,
   marks,
   setMark,
 }) => {
-  const rowMarkKeys = React.useMemo(() => computeRowMarkKeys(places), [places]);
+  const [sortByDistance, setSortByDistance] = React.useState(false);
+  const [channelOn, setChannelOn] = React.useState<Record<ChannelKey, boolean>>({
+    site: true,
+    whatsapp: true,
+    instagram: true,
+    app: true,
+  });
+
+  const visiblePlaces = React.useMemo(() => {
+    const keys: ChannelKey[] = ['site', 'whatsapp', 'instagram', 'app'];
+    return places.filter((p) =>
+      keys.every((k) => channelOn[k] || !placeHasChannel(p, k))
+    );
+  }, [places, channelOn]);
+
+  const sortedPlaces = React.useMemo(() => {
+    const list = [...visiblePlaces];
+    const dist = (p: Place) => {
+      const loc = p.geometry?.location;
+      if (!userLocation || !loc) return Number.POSITIVE_INFINITY;
+      return distanceMeters(userLocation, loc);
+    };
+    const channelCmp = (a: Place, b: Place) => {
+      const bits = (p: Place) =>
+        [
+          Boolean(p.website),
+          Boolean(p.whatsapp_url),
+          Boolean(p.instagram_url),
+          p.hasApp === true,
+        ] as const;
+      const ba = bits(a);
+      const bb = bits(b);
+      for (let i = 0; i < ba.length; i++) {
+        const va = ba[i] ? 1 : 0;
+        const vb = bb[i] ? 1 : 0;
+        if (vb !== va) return vb - va;
+      }
+      return 0;
+    };
+
+    list.sort((a, b) => {
+      if (sortByDistance && userLocation) {
+        const d = dist(a) - dist(b);
+        if (d !== 0) return d;
+      }
+      const r = channelCmp(a, b);
+      if (r !== 0) return r;
+      return dist(a) - dist(b);
+    });
+    return list;
+  }, [visiblePlaces, sortByDistance, userLocation]);
+
+  const rowMarkKeys = React.useMemo(() => computeRowMarkKeys(sortedPlaces), [sortedPlaces]);
   const markPinTotals = React.useMemo(
-    () => computeMarkPinTotals(places, rowMarkKeys, marks),
-    [places, rowMarkKeys, marks]
+    () => computeMarkPinTotals(sortedPlaces, rowMarkKeys, marks),
+    [sortedPlaces, rowMarkKeys, marks]
   );
+
+  const toggleChannel = (k: ChannelKey) => {
+    setChannelOn((prev) => ({ ...prev, [k]: !prev[k] }));
+  };
 
   if (places.length === 0) return null;
 
@@ -42,24 +118,92 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({
       id="places-results-list"
       className="mt-14 mb-8 scroll-mt-28"
     >
-      <div className="flex items-center gap-2 mb-4">
-        <div className="bg-emerald-600 p-2 rounded-xl text-white">
-          <ListChecks className="w-5 h-5" />
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <div className="bg-emerald-600 p-2 rounded-xl text-white shrink-0">
+            <ListChecks className="w-5 h-5" />
+          </div>
+          <div>
+            <h2 className="text-xl font-black text-gray-900 tracking-tight">Lista de resultados</h2>
+            <p className="text-xs text-gray-500 font-medium max-w-3xl">
+              Contatos: WhatsApp, Instagram, site, app, endereço e telefone. No mapa, resultados vêm{' '}
+              <strong className="text-red-600">vermelhos</strong> por padrão;{' '}
+              <strong className="text-amber-600">amarelo</strong> = tem potencial;{' '}
+              <strong className="text-emerald-600">verde</strong> = vendeu seu sistema;{' '}
+              <strong className="text-red-600">vermelho</strong> explícito = sem potencial ou não vendeu. Sua
+              localização é o pino <strong className="text-blue-600">azul</strong>. Salvo neste navegador.
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 className="text-xl font-black text-gray-900 tracking-tight">Lista de resultados</h2>
-          <p className="text-xs text-gray-500 font-medium max-w-3xl">
-            Contatos: WhatsApp, Instagram, site, app, endereço e telefone. No mapa, resultados vêm{' '}
-            <strong className="text-red-600">vermelhos</strong> por padrão;{' '}
-            <strong className="text-amber-600">amarelo</strong> = tem potencial;{' '}
-            <strong className="text-emerald-600">verde</strong> = vendeu seu sistema;{' '}
-            <strong className="text-red-600">vermelho</strong> explícito = sem potencial ou não vendeu. Sua
-            localização é o pino <strong className="text-blue-600">azul</strong>. Salvo neste navegador.
-          </p>
+
+        <div
+          className="flex flex-wrap items-center gap-2 sm:justify-end"
+          role="toolbar"
+          aria-label="Ordenar e filtrar a tabela"
+        >
+          <button
+            type="button"
+            title={
+              userLocation
+                ? sortByDistance
+                  ? 'Ordenação: distância (ligado)'
+                  : 'Ordenação: site → WhatsApp → Instagram → app; depois distância'
+                : 'Ative localização no mapa para ordenar por distância'
+            }
+            aria-pressed={sortByDistance}
+            disabled={!userLocation}
+            onClick={() => setSortByDistance((v) => !v)}
+            className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border-2 transition-all ${
+              sortByDistance && userLocation
+                ? 'border-blue-600 bg-blue-50 text-blue-700'
+                : 'border-gray-200 bg-white text-gray-400 hover:border-gray-300 hover:text-gray-600'
+            } disabled:cursor-not-allowed disabled:opacity-40`}
+          >
+            <Navigation className="w-5 h-5" aria-hidden />
+          </button>
+          <span className="hidden sm:inline w-px h-6 bg-gray-200 mx-0.5" aria-hidden />
+          {(
+            [
+              ['site', Globe, 'text-indigo-600'] as const,
+              ['whatsapp', MessageCircle, 'text-emerald-600'] as const,
+              ['instagram', Instagram, 'text-pink-600'] as const,
+              ['app', Smartphone, 'text-blue-600'] as const,
+            ] as const
+          ).map(([key, Icon, colorClass]) => {
+            const on = channelOn[key];
+            return (
+              <button
+                key={key}
+                type="button"
+                title={CHANNEL_LABEL[key]}
+                aria-pressed={on}
+                onClick={() => toggleChannel(key)}
+                className={`inline-flex h-10 w-10 items-center justify-center rounded-xl border-2 transition-all ${
+                  on
+                    ? `border-gray-300 bg-white ${colorClass}`
+                    : 'border-gray-200 bg-gray-100 text-gray-400 opacity-50'
+                }`}
+              >
+                <Icon className="w-5 h-5" aria-hidden />
+              </button>
+            );
+          })}
         </div>
       </div>
 
+      {visiblePlaces.length < places.length && (
+        <p className="text-[11px] font-bold text-gray-500 mb-2">
+          Mostrando {visiblePlaces.length} de {places.length} na tabela (ícones desligados ocultam quem tem aquele canal).
+        </p>
+      )}
+
       <MarkTotalsBar totals={markPinTotals} className="mb-4" />
+
+      {sortedPlaces.length === 0 && (
+        <p className="text-sm font-bold text-amber-800 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3 mb-4">
+          Nenhuma linha com os ícones atuais: ligue de novo os canais que quiser incluir na tabela.
+        </p>
+      )}
 
       <div className="overflow-x-auto rounded-2xl border border-gray-200 bg-white shadow-sm">
         <table className="min-w-[960px] w-full text-left text-sm">
@@ -76,7 +220,7 @@ const PlacesResultsList: React.FC<PlacesResultsListProps> = ({
             </tr>
           </thead>
           <tbody>
-            {places.map((place, index) => {
+            {sortedPlaces.map((place, index) => {
               const markKey = rowMarkKeys[index] ?? `row:${index}`;
               const mark = marks[markKey];
               const addr = place.formatted_address || place.vicinity || '—';
