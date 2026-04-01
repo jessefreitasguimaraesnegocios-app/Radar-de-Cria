@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
 import { twMerge } from 'tailwind-merge';
@@ -8,6 +8,10 @@ import {
   USER_LOCATION_MARKER_HEX,
   type PlaceMarkColor,
 } from '../lib/placeMarks';
+import { circleRingLngLat } from '../lib/geo';
+
+const SEARCH_RADIUS_SOURCE_ID = 'search-radius-circle';
+const SEARCH_RADIUS_LINE_LAYER_ID = 'search-radius-circle-line';
 
 interface MapProps {
   userLocation: UserLocation;
@@ -16,6 +20,10 @@ interface MapProps {
   rowMarkKeys: string[];
   marks: Record<string, PlaceMarkColor>;
   onPlaceSelect: (place: Place) => void;
+  /** Raio em metros correspondente ao filtro da busca (círculo no mapa). */
+  searchRadiusMeters: number;
+  /** Exibe ou oculta o contorno fino do raio. */
+  showSearchRadiusOutline: boolean;
   /** Sobrescreve altura (ex.: mapa maior no painel mobile). */
   containerClassName?: string;
 }
@@ -26,11 +34,14 @@ const Map: React.FC<MapProps> = ({
   rowMarkKeys,
   marks,
   onPlaceSelect,
+  searchRadiusMeters,
+  showSearchRadiusOutline,
   containerClassName,
 }) => {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<mapboxgl.Map | null>(null);
   const markers = useRef<mapboxgl.Marker[]>([]);
+  const [mapStyleReady, setMapStyleReady] = useState(false);
   const onPlaceSelectRef = useRef(onPlaceSelect);
   onPlaceSelectRef.current = onPlaceSelect;
 
@@ -49,6 +60,7 @@ const Map: React.FC<MapProps> = ({
         });
 
         map.current.addControl(new mapboxgl.NavigationControl());
+        map.current.once('load', () => setMapStyleReady(true));
       }
     };
 
@@ -64,6 +76,61 @@ const Map: React.FC<MapProps> = ({
   useLayoutEffect(() => {
     map.current?.resize();
   }, [containerClassName, userLocation.lat, userLocation.lng, places.length]);
+
+  useEffect(() => {
+    const m = map.current;
+    if (!m || !mapStyleReady) return;
+
+    const applyRadiusOutline = () => {
+      if (!m.isStyleLoaded()) return;
+      if (!showSearchRadiusOutline) {
+        if (m.getLayer(SEARCH_RADIUS_LINE_LAYER_ID)) {
+          m.setLayoutProperty(SEARCH_RADIUS_LINE_LAYER_ID, 'visibility', 'none');
+        }
+        return;
+      }
+
+      const ring = circleRingLngLat(userLocation.lng, userLocation.lat, searchRadiusMeters);
+      const data = {
+        type: 'Feature' as const,
+        properties: {},
+        geometry: {
+          type: 'Polygon' as const,
+          coordinates: [ring],
+        },
+      };
+
+      const src = m.getSource(SEARCH_RADIUS_SOURCE_ID) as mapboxgl.GeoJSONSource | undefined;
+      if (!src) {
+        m.addSource(SEARCH_RADIUS_SOURCE_ID, { type: 'geojson', data });
+        m.addLayer({
+          id: SEARCH_RADIUS_LINE_LAYER_ID,
+          type: 'line',
+          source: SEARCH_RADIUS_SOURCE_ID,
+          paint: {
+            'line-color': '#2563eb',
+            'line-width': 1.5,
+            'line-opacity': 0.9,
+          },
+        });
+      } else {
+        src.setData(data);
+        if (m.getLayer(SEARCH_RADIUS_LINE_LAYER_ID)) {
+          m.setLayoutProperty(SEARCH_RADIUS_LINE_LAYER_ID, 'visibility', 'visible');
+        }
+      }
+    };
+
+    if (m.isStyleLoaded()) {
+      applyRadiusOutline();
+    } else {
+      m.once('load', applyRadiusOutline);
+    }
+
+    return () => {
+      m.off('load', applyRadiusOutline);
+    };
+  }, [mapStyleReady, userLocation.lat, userLocation.lng, searchRadiusMeters, showSearchRadiusOutline]);
 
   useEffect(() => {
     if (map.current) {

@@ -14,6 +14,9 @@ interface FiltersProps {
   resultCount: number;
   loading: boolean;
   onScrollToList: () => void;
+  /** Contorno do raio de busca no mapa. */
+  showSearchRadiusOnMap: boolean;
+  onShowSearchRadiusOnMapChange: (show: boolean) => void;
 }
 
 const Filters: React.FC<FiltersProps> = ({
@@ -27,6 +30,8 @@ const Filters: React.FC<FiltersProps> = ({
   resultCount,
   loading,
   onScrollToList,
+  showSearchRadiusOnMap,
+  onShowSearchRadiusOnMapChange,
 }) => {
   const [query, setQuery] = React.useState('');
   const [keyword, setKeyword] = React.useState('');
@@ -90,18 +95,29 @@ const Filters: React.FC<FiltersProps> = ({
           </button>
         </div>
 
-        <div className="flex items-center gap-2 w-full md:w-auto">
-          <span className="text-sm font-medium text-gray-500 whitespace-nowrap">Raio:</span>
-          <select
-            value={radius}
-            onChange={(e) => onRadiusChange(Number(e.target.value))}
-            className="bg-gray-50 px-3 py-3 rounded-xl border-none focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold text-gray-700 w-full md:w-32"
-          >
-            <option value={1000}>1 km</option>
-            <option value={5000}>5 km</option>
-            <option value={10000}>10 km</option>
-            <option value={20000}>20 km</option>
-          </select>
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center w-full lg:col-span-3">
+          <div className="flex items-center gap-2 w-full sm:w-auto">
+            <span className="text-sm font-medium text-gray-500 whitespace-nowrap">Raio:</span>
+            <select
+              value={radius}
+              onChange={(e) => onRadiusChange(Number(e.target.value))}
+              className="bg-gray-50 px-3 py-3 rounded-xl border-none focus:ring-2 focus:ring-blue-500 outline-none text-sm font-bold text-gray-700 w-full sm:w-32 min-w-0"
+            >
+              <option value={1000}>1 km</option>
+              <option value={5000}>5 km</option>
+              <option value={10000}>10 km</option>
+              <option value={20000}>20 km</option>
+            </select>
+          </div>
+          <label className="inline-flex items-center gap-2 text-xs font-bold text-gray-600 cursor-pointer select-none shrink-0">
+            <input
+              type="checkbox"
+              checked={showSearchRadiusOnMap}
+              onChange={(e) => onShowSearchRadiusOnMapChange(e.target.checked)}
+              className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 size-4 shrink-0"
+            />
+            Mostrar círculo do raio no mapa
+          </label>
         </div>
       </div>
 

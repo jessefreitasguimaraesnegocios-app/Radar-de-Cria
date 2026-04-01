@@ -159,6 +159,7 @@ const App: React.FC = () => {
   const [selectedPlaceId, setSelectedPlaceId] = useState<string | null>(null);
   const [keyword, setKeyword] = useState('');
   const [mobilePanel, setMobilePanel] = useState<'map' | 'lista'>('map');
+  const [showSearchRadiusOnMap, setShowSearchRadiusOnMap] = useState(true);
   const { marks, setMark } = usePlaceMarks();
 
   useEffect(() => {
@@ -508,6 +509,8 @@ const App: React.FC = () => {
                 rowMarkKeys={rowMarkKeys}
                 marks={marks}
                 onPlaceSelect={(place) => setSelectedPlaceId(place.place_id)}
+                searchRadiusMeters={radius}
+                showSearchRadiusOutline={showSearchRadiusOnMap}
               />
               <MarkTotalsBar totals={markPinTotals} />
             </div>
@@ -535,6 +538,8 @@ const App: React.FC = () => {
           resultCount={filteredPlaces.length}
           loading={loading}
           onScrollToList={scrollToResultsList}
+          showSearchRadiusOnMap={showSearchRadiusOnMap}
+          onShowSearchRadiusOnMapChange={setShowSearchRadiusOnMap}
         />
 
         {/* Error State */}
@@ -589,6 +594,8 @@ const App: React.FC = () => {
                     rowMarkKeys={rowMarkKeys}
                     marks={marks}
                     onPlaceSelect={(place) => setSelectedPlaceId(place.place_id)}
+                    searchRadiusMeters={radius}
+                    showSearchRadiusOutline={showSearchRadiusOnMap}
                     containerClassName="min-h-[200px] flex-1 w-full !h-auto min-w-0 shadow-md"
                   />
                   <MarkTotalsBar totals={markPinTotals} compact className="shrink-0" />
